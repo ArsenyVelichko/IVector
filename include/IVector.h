@@ -49,9 +49,9 @@ public:
     virtual ~IVector() = 0;
 
 private:
-    IVector(const IVector& vector) = delete;
-    IVector& operator=(const IVector& vector) = delete;
+	IVector(const IVector& vector) = delete;
+	IVector& operator=(const IVector& vector) = delete;
 
 protected:
-    IVector() = default;
+	IVector() = default;
 };

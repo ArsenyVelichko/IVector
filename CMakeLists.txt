@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.0)
 project(IVector)
 
-include_directories(include)
-file(GLOB SRC src/*.cpp)
+set(CMAKE_CXX_STANDARD 11)
 
+include_directories(include)
+file(GLOB SRC src/*.cpp src/*.h)
+
+add_compile_definitions(BUILD_INTERFACES)
 add_executable(${PROJECT_NAME} ${SRC})
