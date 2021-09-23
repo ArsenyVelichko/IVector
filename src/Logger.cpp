@@ -1,35 +1,35 @@
 #include <fstream>
 #include <iostream>
 
-#include "LoggerImpl.h"
+#include "Logger.h"
 
-bool LoggerImpl::m_isMsgMapInit = false;
-const char* LoggerImpl::m_msgMap[static_cast<int>(RC::AMOUNT)];
+bool Logger::m_isMsgMapInit = false;
+const char* Logger::m_msgMap[static_cast<int>(RC::AMOUNT)];
 
-ILogger* LoggerImpl::createLogger() { return new (std::nothrow) LoggerImpl(std::cout); }
+ILogger* Logger::createLogger() { return new (std::nothrow) Logger(); }
 
-ILogger* LoggerImpl::createLogger(const char* const& filename, bool overwrite) {
+ILogger* Logger::createLogger(const char* const& filename, bool overwrite) {
 	auto mode = overwrite ? std::ios_base::out : std::ios_base::app;
 	std::ofstream fstream(filename, mode);
 
 	if (fstream.fail()) {
 		return nullptr;
 	}
-	return new (std::nothrow) LoggerImpl(std::move(fstream));
+	return new (std::nothrow) Logger(std::move(fstream));
 }
 
-LoggerImpl::LoggerImpl(std::ostream& outputStream) : m_outputStream(outputStream) {}
+Logger::Logger() : m_outputStream(std::cout) {}
 
-LoggerImpl::LoggerImpl(std::ofstream&& outputFile) :
+Logger::Logger(std::ofstream&& outputFile) :
 	m_outputStream(m_outputFile), m_outputFile(std::move(outputFile)) {}
 
-ILogger* ILogger::createLogger() { return LoggerImpl::createLogger(); }
+ILogger* ILogger::createLogger() { return Logger::createLogger(); }
 
 ILogger* ILogger::createLogger(const char* const& filename, bool overwrite) {
-	return LoggerImpl::createLogger(filename, overwrite);
+	return Logger::createLogger(filename, overwrite);
 }
 
-RC LoggerImpl::log(RC code, ILogger::Level level) {
+RC Logger::log(RC code, ILogger::Level level) {
 
 	m_outputStream << warningLvlToStr(level) << ": " //
 				   << getCodeMsg(code)				 //
@@ -38,7 +38,7 @@ RC LoggerImpl::log(RC code, ILogger::Level level) {
 	return RC::SUCCESS;
 }
 
-RC LoggerImpl::log(RC code,
+RC Logger::log(RC code,
 			   ILogger::Level level,
 			   const char* const& srcfile,
 			   const char* const& function,
@@ -54,7 +54,7 @@ RC LoggerImpl::log(RC code,
 	return RC::SUCCESS;
 }
 
-const char* LoggerImpl::getCodeMsg(RC code) {
+const char* Logger::getCodeMsg(RC code) {
 	initMsgMap();
 
 	if (code == RC::AMOUNT) {
@@ -63,7 +63,7 @@ const char* LoggerImpl::getCodeMsg(RC code) {
 	return m_msgMap[(int)code];
 }
 
-const char* LoggerImpl::warningLvlToStr(ILogger::Level level) {
+const char* Logger::warningLvlToStr(ILogger::Level level) {
 	switch (level) {
 	case Level::WARNING:
 		return "Warning";
@@ -79,12 +79,12 @@ const char* LoggerImpl::warningLvlToStr(ILogger::Level level) {
 	}
 }
 
-void LoggerImpl::setMapMsg(RC code, const char* msg) {
+void Logger::setMapMsg(RC code, const char* msg) {
 	int intCode = static_cast<int>(code);
 	m_msgMap[intCode] = msg;
 }
 
-void LoggerImpl::initMsgMap() {
+void Logger::initMsgMap() {
 	if (m_isMsgMapInit) {
 		return;
 	}
@@ -104,7 +104,6 @@ void LoggerImpl::initMsgMap() {
 	setMapMsg(RC::MEMORY_INTERSECTION, "Found intersecting memory while copying instance");
 	setMapMsg(RC::SOURCE_SET_DESTROYED, "Source set was destroyed");
 	setMapMsg(RC::SOURCE_SET_EMPTY, "Source set is empty");
-	setMapMsg(RC::VECTOR_ALREADY_EXIST, "Vector already exists");
 	setMapMsg(RC::VECTOR_ALREADY_EXIST, "Vector already exists");
 
 	m_isMsgMapInit = true;

@@ -3,10 +3,10 @@
 
 #include <fstream>
 
-#include "ILogger.h"
+#include <ILogger.h>
 
 namespace {
-	class LoggerImpl : public ILogger {
+	class Logger : public ILogger {
 	public:
 		static ILogger* createLogger();
 		static ILogger* createLogger(const char* const& filename, bool overwrite = true);
@@ -19,8 +19,8 @@ namespace {
 			   int line) override;
 
 	private:
-		LoggerImpl(std::ostream& outputStream);
-		LoggerImpl(std::ofstream&& outputFile);
+		Logger();
+		Logger(std::ofstream&& outputFile);
 
 		static const char* getCodeMsg(RC code);
 		static const char* warningLvlToStr(Level level);

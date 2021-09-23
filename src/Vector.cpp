@@ -1,23 +1,20 @@
 #include <cmath>
 #include <cstring>
 
-#include "LogUtils.h"
-#include "VectorImpl.h"
+#include "Vector.h"
 
 using std::isinf;
 using std::isnan;
 using std::memcpy;
 
-ILogger* VectorImpl::m_logger = nullptr;
-
-VectorImpl* VectorImpl::createVector(size_t dim, double const* const& data) {
-	size_t size = sizeof(VectorImpl) + dim * sizeof(double);
+Vector* Vector::createVector(size_t dim, double const* const& data) {
+	size_t size = sizeof(Vector) + dim * sizeof(double);
 	uint8_t* mem = new (std::nothrow) uint8_t[size];
 	if (!mem) {
-		log_warning(m_logger, RC::ALLOCATION_ERROR);
+		log_warning(RC::ALLOCATION_ERROR);
 		return nullptr;
 	}
-	auto vector = new (mem) VectorImpl(dim);
+	auto vector = new (mem) Vector(dim);
 
 	if (vector->setData(dim, data) != RC::SUCCESS) {
 		delete[] mem;
@@ -27,29 +24,23 @@ VectorImpl* VectorImpl::createVector(size_t dim, double const* const& data) {
 	return vector;
 }
 
-RC VectorImpl::setLogger(ILogger* logger) {
-	m_logger = logger;
-	return RC::SUCCESS;
-}
+ILogger* IVector::getLogger() { return LogProducer<Vector>::getLogger(); }
 
-ILogger* VectorImpl::getLogger() { return m_logger; }
-ILogger* IVector::getLogger() { return VectorImpl::getLogger(); }
+IVector* Vector::clone() const { return Vector::createVector(m_dim, getData()); }
 
-IVector* VectorImpl::clone() const { return VectorImpl::createVector(m_dim, getData()); }
-
-const double* VectorImpl::getData() const {
+const double* Vector::getData() const {
 	auto* memBegin = reinterpret_cast<const int8_t*>(this);
-	auto* dataBegin = memBegin + sizeof(VectorImpl);
+	auto* dataBegin = memBegin + sizeof(Vector);
 	return reinterpret_cast<const double*>(dataBegin);
 }
 
-double* VectorImpl::getData() {
+double* Vector::getData() {
 	auto* memBegin = reinterpret_cast<int8_t*>(this);
-	auto* dataBegin = memBegin + sizeof(VectorImpl);
+	auto* dataBegin = memBegin + sizeof(Vector);
 	return reinterpret_cast<double*>(dataBegin);
 }
 
-double VectorImpl::infiniteNorm() const {
+double Vector::infiniteNorm() const {
 	auto data = getData();
 	double norm = 0;
 
@@ -60,7 +51,7 @@ double VectorImpl::infiniteNorm() const {
 	return norm;
 }
 
-double VectorImpl::firstNorm() const {
+double Vector::firstNorm() const {
 	auto data = getData();
 	double norm = 0;
 
@@ -71,7 +62,7 @@ double VectorImpl::firstNorm() const {
 	return norm;
 }
 
-double VectorImpl::secondNorm() const {
+double Vector::secondNorm() const {
 	auto data = getData();
 	double norm = 0;
 
@@ -82,7 +73,7 @@ double VectorImpl::secondNorm() const {
 	return sqrt(norm);
 }
 
-RC VectorImpl::setData(size_t dim, double const* const& data) {
+RC Vector::setData(size_t dim, double const* const& data) {
 
 	if (dim != m_dim) {
 		return RC::MISMATCHING_DIMENSIONS;
@@ -98,7 +89,7 @@ RC VectorImpl::setData(size_t dim, double const* const& data) {
 	return RC::SUCCESS;
 }
 
-RC VectorImpl::getCord(size_t index, double& val) const {
+RC Vector::getCord(size_t index, double& val) const {
 
 	if (index >= m_dim) {
 		return RC::INDEX_OUT_OF_BOUND;
@@ -108,20 +99,20 @@ RC VectorImpl::getCord(size_t index, double& val) const {
 	return RC::SUCCESS;
 }
 
-RC VectorImpl::setCord(size_t index, double val) {
+RC Vector::setCord(size_t index, double val) {
 
 	if (index >= m_dim) {
-		log_warning(m_logger, RC::INDEX_OUT_OF_BOUND);
+		log_warning(RC::INDEX_OUT_OF_BOUND);
 		return RC::INDEX_OUT_OF_BOUND;
 	}
 
 	if (isnan(val)) {
-		log_warning(m_logger, RC::NOT_NUMBER);
+		log_warning(RC::NOT_NUMBER);
 		return RC::NOT_NUMBER;
 	}
 
 	if (isinf(val)) {
-		log_warning(m_logger, RC::INFINITY_OVERFLOW);
+		log_warning(RC::INFINITY_OVERFLOW);
 		return RC::INFINITY_OVERFLOW;
 	}
 
@@ -129,10 +120,10 @@ RC VectorImpl::setCord(size_t index, double val) {
 	return RC::SUCCESS;
 }
 
-RC VectorImpl::scale(double multiplier) {
+RC Vector::scale(double multiplier) {
 
 	if (isnan(multiplier) || isinf(multiplier)) {
-		log_warning(m_logger, RC::INVALID_ARGUMENT);
+		log_warning(RC::INVALID_ARGUMENT);
 		return RC::INVALID_ARGUMENT;
 	}
 
@@ -140,11 +131,11 @@ RC VectorImpl::scale(double multiplier) {
 	return applyFunction(multiply);
 }
 
-size_t VectorImpl::getDim() const { return m_dim; }
+size_t Vector::getDim() const { return m_dim; }
 
-RC VectorImpl::inc(IVector const* const& op) {
+RC Vector::inc(IVector const* const& op) {
 	if (m_dim != op->getDim()) {
-		log_warning(m_logger, RC::MISMATCHING_DIMENSIONS);
+		log_warning(RC::MISMATCHING_DIMENSIONS);
 		return RC::MISMATCHING_DIMENSIONS;
 	}
 
@@ -160,10 +151,10 @@ RC VectorImpl::inc(IVector const* const& op) {
 	return RC::SUCCESS;
 }
 
-RC VectorImpl::dec(IVector const* const& op) {
+RC Vector::dec(IVector const* const& op) {
 
 	if (m_dim != op->getDim()) {
-		log_warning(m_logger, RC::MISMATCHING_DIMENSIONS);
+		log_warning(RC::MISMATCHING_DIMENSIONS);
 		return RC::MISMATCHING_DIMENSIONS;
 	}
 
@@ -179,7 +170,7 @@ RC VectorImpl::dec(IVector const* const& op) {
 	return RC::SUCCESS;
 }
 
-double VectorImpl::norm(NORM n) const {
+double Vector::norm(NORM n) const {
 	double res = NAN;
 
 	switch (n) {
@@ -196,19 +187,19 @@ double VectorImpl::norm(NORM n) const {
 		break;
 
 	default:
-		log_severe(m_logger, RC::UNKNOWN);
+		log_severe(RC::UNKNOWN);
 		return res;
 	}
 
 	if (isinf(res)) {
-		log_warning(m_logger, RC::INFINITY_OVERFLOW);
+		log_warning(RC::INFINITY_OVERFLOW);
 		return res;
 	}
 
 	return res;
 }
 
-RC VectorImpl::applyFunction(const std::function<double(double)>& fun) {
+RC Vector::applyFunction(const std::function<double(double)>& fun) {
 	double* data = getData();
 
 	for (size_t i = 0; i < m_dim; i++) {
@@ -220,7 +211,7 @@ RC VectorImpl::applyFunction(const std::function<double(double)>& fun) {
 	return RC::SUCCESS;
 }
 
-RC VectorImpl::foreach (const std::function<void(double)>& fun) const {
+RC Vector::foreach(const std::function<void(double)>& fun) const {
 	const double* data = getData();
 	for (size_t i = 0; i < m_dim; i++) {
 		fun(data[i]);
@@ -228,19 +219,23 @@ RC VectorImpl::foreach (const std::function<void(double)>& fun) const {
 	return RC::SUCCESS;
 }
 
-size_t VectorImpl::sizeAllocated() const { return sizeof(VectorImpl) + m_dim * sizeof(double); }
+size_t Vector::sizeAllocated() const { return sizeof(Vector) + m_dim * sizeof(double); }
 
-VectorImpl::~VectorImpl() = default;
+Vector::~Vector() = default;
 
-VectorImpl::VectorImpl(size_t dim) { m_dim = dim; }
+Vector::Vector(size_t dim) { m_dim = dim; }
 
 IVector* IVector::createVector(size_t dim, double const* const& ptr_data) {
-	return VectorImpl::createVector(dim, ptr_data);
+	return Vector::createVector(dim, ptr_data);
 }
 
 RC IVector::copyInstance(IVector* const dest, IVector const* const& src) {
+	if (!dest || ! src) {
+		Vector::log_severe(RC::NULLPTR_ERROR);
+		return RC::NULLPTR_ERROR;
+	}
 
-	if (dest->sizeAllocated() != src->sizeAllocated()) {
+	if (dest->getDim() != src->getDim()) {
 		return RC::MISMATCHING_DIMENSIONS;
 	}
 
@@ -268,27 +263,31 @@ RC IVector::moveInstance(IVector* const dest, IVector*& src) {
 	return RC::SUCCESS;
 }
 
-RC IVector::setLogger(ILogger* const logger) { return VectorImpl::setLogger(logger); }
+RC IVector::setLogger(ILogger* const logger) { return LogProducer<Vector>::setLogger(logger); }
 
 IVector* IVector::add(IVector const* const& op1, IVector const* const& op2) {
-
-	if (op1->getDim() != op2->getDim()) {
-		log_warning(getLogger(), RC::MISMATCHING_DIMENSIONS);
+	if (!op1 || !op2) {
+		Vector::log_severe(RC::NULLPTR_ERROR);
 		return nullptr;
 	}
 
-	IVector* sum = createVector(op1->getDim(), op1->getData());
+	IVector* sum = op1->clone();
 	if (!sum) {
 		return nullptr;
 	}
-	sum->inc(op2);
+
+	RC rc = sum->inc(op2);
+	if (rc != RC::SUCCESS) {
+		delete sum;
+		return nullptr;
+	}
+
 	return sum;
 }
 
 IVector* IVector::sub(IVector const* const& op1, IVector const* const& op2) {
-
-	if (op1->getDim() != op2->getDim()) {
-		log_warning(getLogger(), RC::MISMATCHING_DIMENSIONS);
+	if (!op1 || !op2) {
+		Vector::log_severe(RC::NULLPTR_ERROR);
 		return nullptr;
 	}
 
@@ -296,14 +295,23 @@ IVector* IVector::sub(IVector const* const& op1, IVector const* const& op2) {
 	if (!diff) {
 		return nullptr;
 	}
-	diff->dec(op2);
+
+	RC rc = diff->dec(op2);
+	if (rc != RC::SUCCESS) {
+		delete diff;
+		return nullptr;
+	}
 	return diff;
 }
 
 double IVector::dot(IVector const* const& op1, IVector const* const& op2) {
+	if (!op1 || !op2) {
+		Vector::log_severe(RC::NULLPTR_ERROR);
+		return false;
+	}
 
 	if (op1->getDim() != op2->getDim()) {
-		log_warning(getLogger(), RC::MISMATCHING_DIMENSIONS);
+		Vector::log_warning(RC::MISMATCHING_DIMENSIONS);
 		return NAN;
 	}
 
@@ -318,7 +326,7 @@ double IVector::dot(IVector const* const& op1, IVector const* const& op2) {
 	}
 
 	if (isinf(res)) {
-		log_warning(getLogger(), RC::INFINITY_OVERFLOW);
+		Vector::log_warning(RC::INFINITY_OVERFLOW);
 		return NAN;
 	}
 
@@ -328,7 +336,6 @@ double IVector::dot(IVector const* const& op1, IVector const* const& op2) {
 bool IVector::equals(IVector const* const& op1, IVector const* const& op2, NORM n, double tol) {
 	IVector* diff = sub(op1, op2);
 	if (!diff) {
-		log_warning(getLogger(), RC::ALLOCATION_ERROR);
 		return false;
 	}
 

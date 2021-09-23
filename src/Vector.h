@@ -1,13 +1,13 @@
 #pragma once
 #include <IVector.h>
 
-#include "LogUtils.h"
+#include "LogProducer.h"
 
 constexpr int foo() { return 0; }
 
 namespace {
 
-	class VectorImpl : public IVector {
+	class Vector : public IVector, public LogProducer<Vector> {
 	public:
 		IVector* clone() const override;
 		double const* getData() const override;
@@ -28,14 +28,12 @@ namespace {
 
 		size_t sizeAllocated() const override;
 
-		~VectorImpl();
+		~Vector();
 
-		static VectorImpl* createVector(size_t dim, const double* const& data);
-		static RC setLogger(ILogger* logger);
-		static ILogger* getLogger();
+		static Vector* createVector(size_t dim, const double* const& data);
 
 	private:
-		VectorImpl(size_t dim);
+		Vector(size_t dim);
 
 		double* getData();
 
@@ -44,7 +42,6 @@ namespace {
 		double secondNorm() const;
 
 		size_t m_dim;
-		static ILogger* m_logger;
 	};
 
 } // namespace
