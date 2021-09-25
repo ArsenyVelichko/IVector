@@ -40,18 +40,10 @@ public:
 				 IVector* vector,
 				 size_t hash);
 
-		/*
-		 * Create iterator associated with next/previous position
-		 *
-		 * @param [in] indexInc Quantity of steps forward
-		 */
 		IIterator* getNext(size_t indexInc = 1) const override;
 		IIterator* getPrevious(size_t indexInc = 1) const override;
 		IIterator* clone() const override;
 
-		/*
-		 * Moves iterator forward/backward
-		 */
 		RC next(size_t indexInc = 1) override;
 		RC previous(size_t indexInc = 1) override;
 
@@ -60,13 +52,7 @@ public:
 		RC makeBegin() override;
 		RC makeEnd() override;
 
-		/*
-		 * Getter of value (same semantic as ISet::getCopy)
-		 */
 		RC getVectorCopy(IVector*& val) const override;
-		/*
-		 * Getter of value (same semantic as ISet::getCoords)
-		 */
 		RC getVectorCoords(IVector* const& val) const override;
 
 		~Iterator() override;

@@ -26,8 +26,8 @@ public:
     static RC setLogger(ILogger* const logger);
     static ILogger* getLogger();
 
-    virtual RC getCord(size_t index, double& val) const = 0;
-    virtual RC setCord(size_t index, double val) = 0;
+	virtual RC getCoord(size_t index, double& val) const = 0;
+	virtual RC setCoord(size_t index, double val) = 0;
     virtual RC scale(double multiplier) = 0;
     virtual size_t getDim() const = 0;
 

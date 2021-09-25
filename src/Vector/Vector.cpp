@@ -80,7 +80,7 @@ RC Vector::setData(size_t dim, double const* const& data) {
 	}
 
 	for (size_t i = 0; i < dim; i++) {
-		RC rc = setCord(i, data[i]);
+		RC rc = setCoord(i, data[i]);
 		if (rc != RC::SUCCESS) {
 			return rc;
 		}
@@ -89,7 +89,7 @@ RC Vector::setData(size_t dim, double const* const& data) {
 	return RC::SUCCESS;
 }
 
-RC Vector::getCord(size_t index, double& val) const {
+RC Vector::getCoord(size_t index, double& val) const {
 
 	if (index >= m_dim) {
 		return RC::INDEX_OUT_OF_BOUND;
@@ -99,7 +99,7 @@ RC Vector::getCord(size_t index, double& val) const {
 	return RC::SUCCESS;
 }
 
-RC Vector::setCord(size_t index, double val) {
+RC Vector::setCoord(size_t index, double val) {
 
 	if (index >= m_dim) {
 		log_warning(RC::INDEX_OUT_OF_BOUND);
@@ -143,7 +143,7 @@ RC Vector::inc(IVector const* const& op) {
 	const double* opData = op->getData();
 
 	for (size_t i = 0; i < m_dim; i++) {
-		RC rc = setCord(i, data[i] + opData[i]);
+		RC rc = setCoord(i, data[i] + opData[i]);
 		if (rc != RC::SUCCESS) {
 			return rc;
 		}
@@ -162,7 +162,7 @@ RC Vector::dec(IVector const* const& op) {
 	const double* opData = op->getData();
 
 	for (size_t i = 0; i < m_dim; i++) {
-		RC rc = setCord(i, data[i] - opData[i]);
+		RC rc = setCoord(i, data[i] - opData[i]);
 		if (rc != RC::SUCCESS) {
 			return rc;
 		}
@@ -203,7 +203,7 @@ RC Vector::applyFunction(const std::function<double(double)>& fun) {
 	double* data = getData();
 
 	for (size_t i = 0; i < m_dim; i++) {
-		RC rc = setCord(i, fun(data[i]));
+		RC rc = setCoord(i, fun(data[i]));
 		if (rc != RC::SUCCESS) {
 			return rc;
 		}

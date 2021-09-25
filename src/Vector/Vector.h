@@ -13,8 +13,8 @@ namespace {
 		double const* getData() const override;
 		RC setData(size_t dim, double const* const& data) override;
 
-		RC getCord(size_t index, double& val) const override;
-		RC setCord(size_t index, double val) override;
+		RC getCoord(size_t index, double& val) const override;
+		RC setCoord(size_t index, double val) override;
 		RC scale(double multiplier) override;
 		size_t getDim() const override;
 

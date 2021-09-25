@@ -55,7 +55,8 @@ RC Set::findFirst(IVector const* pat, IVector::NORM n, double tol, size_t& index
 double* Set::getData(size_t index) const { return m_data + m_dim * index; }
 
 IVector* Set::createZeroVec(size_t dim) {
-	return IVector::createVector(dim, new (std::nothrow) double[dim]());
+	std::shared_ptr<double> zeroData(new double[dim]());
+	return IVector::createVector(dim, zeroData.get());
 }
 
 RC Set::findFirstAndCopy(IVector const* const& pat,
@@ -338,8 +339,8 @@ ISet* Set::clone() const {
 		return nullptr;
 	}
 
-	memcpy(copy->m_data, m_data, vecDataSize() * m_capacity);
-	memcpy(copy->m_hashArr, m_hashArr, sizeof(size_t) * m_capacity);
+	memcpy(copy->m_data, m_data, vecDataSize() * m_size);
+	memcpy(copy->m_hashArr, m_hashArr, sizeof(size_t) * m_size);
 	return copy;
 }
 

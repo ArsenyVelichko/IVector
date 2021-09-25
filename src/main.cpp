@@ -40,9 +40,9 @@ void vectorTest(ILogger* logger) {
 
 	cout << endl;
 	cout << "Setting coord 1 in vec2 to 16" << endl;
-	vec2->setCord(1, 16);
+	vec2->setCoord(1, 16);
 	cout << "Setting coord 5 in vec1 to 0" << endl;
-	vec1->setCord(5, 0);
+	vec1->setCoord(5, 0);
 
 	cout << "vec1: ";
 	vec1->foreach (print);
@@ -265,24 +265,24 @@ void setTest(ILogger* logger) {
 		return;
 	}
 	cout << "Result of the operation \"is set1 subset of set2\": " << ISet::subSet(set1, set2, IVector::NORM::SECOND, 0.01) << endl;
-	cout << "Inserting 10000 vectors to set2" << endl;
-	for (int i = 0; i < 10000; i++) {
-		coords[0] = (i * i - 7 * i + 3) % 1301;
-		coords[1] = (-3 * i * i + 255 * i + 32) % 1553;
-		coords[2] = (i * i - 7833 * i - 98) % 1217;
-		vecArray[0]->setData(dim, coords);
-		RC code = set2->insert(vecArray[0], IVector::NORM::SECOND, 0.01);
-		if (code != RC::SUCCESS) {
-			logger->severe(code);
-			break;
-		}
-		if (i % 1000 == 0) {
-			cout << '.';
-			cout.flush();
-		}
-	}
-	cout << endl;
-	cout << "Set2 size: " << set2->getSize() << endl;
+//	cout << "Inserting 10000 vectors to set2" << endl;
+//	for (int i = 0; i < 10000; i++) {
+//		coords[0] = (i * i - 7 * i + 3) % 1301;
+//		coords[1] = (-3 * i * i + 255 * i + 32) % 1553;
+//		coords[2] = (i * i - 7833 * i - 98) % 1217;
+//		vecArray[0]->setData(dim, coords);
+//		RC code = set2->insert(vecArray[0], IVector::NORM::SECOND, 0.01);
+//		if (code != RC::SUCCESS) {
+//			logger->severe(code);
+//			break;
+//		}
+//		if (i % 1000 == 0) {
+//			cout << '.';
+//			cout.flush();
+//		}
+//	}
+//	cout << endl;
+//	cout << "Set2 size: " << set2->getSize() << endl;
 	cout << "Deleting set2" << endl;
 	delete set2;
 	cout << "Set1 content: ";
