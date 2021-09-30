@@ -1,86 +1,86 @@
-#include <limits>
-#include <cmath>
+#include <algorithm>
+#include <cstring>
+
+#include "VectorUtils.h"
 
 #include "Compact.h"
 #include "CompactControlBlock.h"
 
+struct Compact::CompactDef {
+	IVector* minBound = nullptr;
+	IVector* maxBound = nullptr;
+	IMultiIndex* nodeQuantities = nullptr;
 
-Compact::Compact(IVector* vec1, IVector* vec2, IMultiIndex* nodeQuantities) :
-	m_controlBlock(new CompactControlBlock(this)) {
-	m_lowerBound = vec1;
-	m_upperBound = vec2;
-	m_nodeQuantities = nodeQuantities;
-}
+	bool isValid() const;
+	void clear();
+};
 
-Compact* Compact::createCompact(IVector const* vec1,
-								IVector const* vec2,
-								IMultiIndex const* nodeQuantities) {
-	size_t dim = vec1->getDim();
-	if (dim != vec2->getDim() || dim != nodeQuantities->getDim()) {
-		log_warning(RC::MISMATCHING_DIMENSIONS);
-		return nullptr;
-	}
-
-	IVector* leftBound = vec1->clone();
-	IVector* rightBound = vec2->clone();
-	IMultiIndex* steps = nodeQuantities->clone();
-
-	if (!leftBound || !rightBound || !steps) {
-		delete leftBound;
-		delete rightBound;
-		delete steps;
-		log_warning(RC::ALLOCATION_ERROR);
-		return nullptr;
-	}
-
-	size_t const* stepsData = steps->getData();
-	size_t index;
-	for (size_t i = 0; i < dim; i++) {
-		index = stepsData[i] == 0 ? 0 : stepsData[i] - 1;
-		steps->setAxisIndex(i, index);
-	}
-	double minCoord, maxCoord;
-	const double* leftVecArray = leftBound->getData();
-	const double* rightVecArray = rightBound->getData();
-	for (size_t i = 0; i < dim; i++) {
-		minCoord = fmin(leftVecArray[i], rightVecArray[i]);
-		maxCoord = fmax(leftVecArray[i], rightVecArray[i]);
-		leftBound->setCoord(i, minCoord);
-		rightBound->setCoord(i, maxCoord);
-	}
-	Compact* compact = new (std::nothrow) Compact(leftBound, rightBound, steps);
-
+Compact* Compact::createCompact(const CompactDef& def) {
+	auto compact = new (std::nothrow) Compact(def);
 	if (!compact) {
 		log_warning(RC::ALLOCATION_ERROR);
-
-		delete compact;
-		delete leftBound;
-		delete rightBound;
-		delete steps;
-
 		return nullptr;
 	}
+
+	auto controlBlock = new (std::nothrow) CompactControlBlock(compact);
+	if (!controlBlock) {
+		log_warning(RC::ALLOCATION_ERROR);
+		delete compact;
+		return nullptr;
+	}
+
+	compact->m_controlBlock.reset(controlBlock);
 
 	return compact;
 }
 
-ICompact* Compact::clone() const { return createCompact(m_lowerBound, m_upperBound, m_nodeQuantities); }
+Compact* Compact::createCompact(const IVector* vec1,
+								const IVector* vec2,
+								const IMultiIndex* nodeQuantities) {
 
-size_t Compact::getDim() const { return m_lowerBound->getDim(); }
+	if (nodeQuantities->getDim() != vec1->getDim()) {
+		log_warning(RC::MISMATCHING_DIMENSIONS);
+		return nullptr;
+	}
+
+	CompactDef def;
+	def.nodeQuantities = nodeQuantities->clone();
+	def.minBound = VectorUtils::min(vec1, vec2);
+	def.maxBound = VectorUtils::max(vec1, vec2);
+
+	if (!def.isValid()) {
+		def.clear();
+		return nullptr;
+	}
+
+	auto compact = createCompact(def);
+	if (!compact) {
+		def.clear();
+	}
+	return compact;
+}
+
+ICompact* Compact::clone() const { return createCompact(m_minBound, m_maxBound, m_nodeQuantities); }
+
+size_t Compact::getDim() const { return m_minBound->getDim(); }
 
 IMultiIndex* Compact::getGrid() const { return m_nodeQuantities; }
 
 bool Compact::isInside(IVector const* const& vec) const {
-	size_t dim = getDim();
 
-	if (vec->getDim() != dim) {
+	if (vec->getDim() != getDim()) {
 		log_warning(RC::MISMATCHING_DIMENSIONS);
 		return false;
 	}
 
-	for (size_t i = 0; i < dim; i++) {
-		if (!(m_lowerBound->getData()[i] <= vec->getData()[i]
-			  && vec->getData()[i] <= m_upperBound->getData()[i])) {
+	auto minData = m_minBound->getData();
+	auto maxData = m_maxBound->getData();
+	auto vecData = vec->getData();
+
+	auto isInside = [](double x, double lo, double hi) { return x >= lo && x <= hi; };
+
+	for (size_t i = 0; i < getDim(); i++) {
+		if (!isInside(vecData[i], minData[i], maxData[i])) {
 			return false;
 		}
 	}
@@ -88,235 +88,171 @@ bool Compact::isInside(IVector const* const& vec) const {
 }
 
 RC Compact::getVectorCopy(IMultiIndex const* index, IVector*& val) const {
-	IVector* result = m_lowerBound->clone();
-	size_t dim = getDim();
-
-	if (!result) {
+	auto zeroVec = VectorUtils::createZeroVec(getDim());
+	if (!zeroVec) {
 		return RC::ALLOCATION_ERROR;
 	}
-	if (index->getDim() != dim) {
-		log_warning(RC::MISMATCHING_DIMENSIONS);
-		delete result;
-		return RC::MISMATCHING_DIMENSIONS;
+
+	RC rc = getVectorCoords(index, zeroVec);
+	if (rc != RC::SUCCESS) {
+		delete zeroVec;
+		return rc;
 	}
 
-	double coord = 0, lambda = 0;
-	const size_t* grid = m_nodeQuantities->getData();
-	const size_t* place = index->getData();
-	const double* leftVec = m_lowerBound->getData();
-	const double* rightVec = m_upperBound->getData();
-	for (size_t i = 0; i < dim; i++) {
-		lambda = 0;
-
-		if (index->getData()[i] > m_nodeQuantities->getData()[i]) {
-			log_warning(RC::INDEX_OUT_OF_BOUND);
-			delete result;
-			return RC::INDEX_OUT_OF_BOUND;
-		}
-
-		if (grid[i] != 0) {
-			lambda = (double)place[i] / grid[i];
-		}
-		coord = (1.0 - lambda) * leftVec[i] + lambda * rightVec[i];
-		result->setCoord(i, coord);
-	}
-	val = result;
+	val = zeroVec;
 	return RC::SUCCESS;
 }
 
 RC Compact::getVectorCoords(IMultiIndex const* index, IVector* const& val) const {
-	size_t dim = getDim();
-
-	if (index->getDim() != dim) {
+	if (index->getDim() != getDim()) {
 		log_warning(RC::MISMATCHING_DIMENSIONS);
 		return RC::MISMATCHING_DIMENSIONS;
 	}
 
-	const size_t* grid = m_nodeQuantities->getData();
-	const size_t* place = index->getData();
-	const double* leftVec = m_lowerBound->getData();
-	const double* rightVec = m_upperBound->getData();
-	double coord, lambda = 0.0;
-	for (size_t i = 0; i < dim; i++) {
-		lambda = 0.0;
+	if (!isIndexValid(index)) {
+		log_warning(RC::INDEX_OUT_OF_BOUND);
+		return RC::INDEX_OUT_OF_BOUND;
+	}
 
-		if (place[i] > grid[i]) {
-			log_warning(RC::INDEX_OUT_OF_BOUND);
-			return RC::INDEX_OUT_OF_BOUND;
+	auto nodeData = m_nodeQuantities->getData();
+	auto indexData = index->getData();
+	auto minData = m_minBound->getData();
+	auto maxData = m_maxBound->getData();
+
+	for (size_t i = 0; i < getDim(); i++) {
+		double aspect = 0.0;
+
+		if (nodeData[i] > 1) {
+			aspect = indexData[i] / double(nodeData[i] - 1);
 		}
 
-		if (grid[i] != 0) {
-			lambda = (double)place[i] / grid[i];
-		}
-		coord = (1.0 - lambda) * leftVec[i] + lambda * rightVec[i];
+		double coord = minData[i] + aspect * (maxData[i] - minData[i]);
 		val->setCoord(i, coord);
 	}
 	return RC::SUCCESS;
 }
 
 RC Compact::getLeftBoundary(IVector*& vec) const {
-	vec = m_lowerBound->clone();
-	return vec == nullptr ? RC::ALLOCATION_ERROR : RC::SUCCESS;
+	IVector* cloneVec = m_minBound->clone();
+
+	if (cloneVec == nullptr) {
+		return RC::ALLOCATION_ERROR;
+	}
+
+	vec = cloneVec;
+	return RC::SUCCESS;
 }
 
 RC Compact::getRightBoundary(IVector*& vec) const {
-	vec = m_upperBound->clone();
-	return vec == nullptr ? RC::ALLOCATION_ERROR : RC::SUCCESS;
+	IVector* cloneVec = m_maxBound->clone();
+
+	if (cloneVec == nullptr) {
+		return RC::ALLOCATION_ERROR;
+	}
+
+	vec = cloneVec;
+	return RC::SUCCESS;
+}
+
+static bool applyTolerance(Compact::CompactDef& def, double tol) {
+	size_t dim = def.minBound->getDim();
+
+	auto minData = def.minBound->getData();
+	auto maxData = def.maxBound->getData();
+	auto nodeData = def.nodeQuantities->getData();
+
+	for (size_t i = 0; i < dim; i++) {
+		double dist = maxData[i] - minData[i];
+		if (dist < 0) {
+			return false;
+		}
+
+		size_t maxNodesNum = static_cast<size_t>(dist / tol) + 1;
+		size_t nodeNum = std::min(nodeData[i], maxNodesNum);
+		def.nodeQuantities->setAxisIndex(i, nodeNum);
+	}
+
+	return true;
 }
 
 ICompact* ICompact::createIntersection(ICompact const* op1,
 									   ICompact const* op2,
 									   IMultiIndex const* const grid,
 									   double tol) {
-	if (!op1 || !op2 || !grid) {
-		Compact::log_warning(RC::NULLPTR_ERROR);
-		return nullptr;
-	}
-	if (op1->getDim() != op2->getDim()) {
-		Compact::log_warning(RC::MISMATCHING_DIMENSIONS);
+	if (!op1 || !op2) {
+		log_warning(RC::NULLPTR_ERROR);
 		return nullptr;
 	}
 
-	IVector* lb1 = nullptr;
-	IVector* rb1 = nullptr;
-	IVector* lb2 = nullptr;
-	IVector* rb2 = nullptr;
-	IMultiIndex* intersectGrid = grid->clone();
-	op1->getLeftBoundary(lb1);
-	op2->getLeftBoundary(lb2);
-	op1->getRightBoundary(rb1);
-	op2->getRightBoundary(rb2);
+	Compact::CompactDef def1;
+	op1->getLeftBoundary(def1.minBound);
+	op1->getRightBoundary(def1.maxBound);
 
-	if (!lb1 || !rb1 || !lb2 || !rb2 || !intersectGrid) {
-		delete lb1;
-		delete lb2;
-		delete rb1;
-		delete rb2;
-		delete intersectGrid;
+	Compact::CompactDef def2;
+	op2->getLeftBoundary(def2.minBound);
+	op2->getRightBoundary(def2.maxBound);
+
+	Compact::CompactDef intersectionDef;
+	intersectionDef.minBound = VectorUtils::max(def1.minBound, def2.minBound);
+	intersectionDef.maxBound = VectorUtils::min(def1.maxBound, def2.maxBound);
+	intersectionDef.nodeQuantities = grid->clone();
+
+	if (!intersectionDef.isValid() || !applyTolerance(intersectionDef, tol)) {
+		def1.clear();
+		def2.clear();
+		intersectionDef.clear();
+
 		return nullptr;
 	}
 
-	IVector* intersectLeft = lb1->clone();
-	IVector* intersectRight = lb1->clone();
-
-	if (!intersectLeft || !intersectRight) {
-		delete intersectLeft;
-		delete intersectRight;
-		delete lb1;
-		delete lb2;
-		delete rb1;
-		delete rb2;
-		delete intersectGrid;
-		return nullptr;
+	auto intersection = Compact::createCompact(intersectionDef);
+	if (!intersection) {
+		log_warning(RC::ALLOCATION_ERROR);
+		intersectionDef.clear();
 	}
 
-	const double* lb1Data = lb1->getData();
-	const double* rb1Data = rb1->getData();
-	const double* lb2Data = lb2->getData();
-	const double* rb2Data = rb2->getData();
-	bool fIntersect = true;
-	for (size_t i = 0; i < op1->getDim(); i++) {
-		if (lb1Data[i] >= lb2Data[i] && lb1Data[i] <= rb2Data[i]) {
-			intersectLeft->setCoord(i, lb1Data[i]);
-			if (rb2Data[i] - lb1Data[i] < tol) {
-				intersectRight->setCoord(i, lb1Data[i]);
-				intersectGrid->setAxisIndex(i, 0);
-			} else {
-				intersectRight->setCoord(i, rb2Data[i]);
-			}
-		} else if (lb2Data[i] >= lb1Data[i] && lb2Data[i] <= rb1Data[i]) {
-			intersectLeft->setCoord(i, lb2Data[i]);
-			if (rb1Data[i] - lb2Data[i] < tol) {
-				intersectRight->setCoord(i, lb2Data[i]);
-				intersectGrid->setAxisIndex(i, 0);
-			} else {
-				intersectRight->setCoord(i, rb1Data[i]);
-			}
-
-		} else {
-			fIntersect = false;
-			break;
-		}
-	}
-	delete lb1;
-	delete lb2;
-	delete rb1;
-	delete rb2;
-	ICompact* Intersection
-		= fIntersect ? ICompact::createCompact(intersectLeft, intersectRight, intersectGrid)
-					 : nullptr;
-	delete intersectLeft;
-	delete intersectRight;
-	delete intersectGrid;
-	return Intersection;
+	def1.clear();
+	def2.clear();
+	return intersection;
 }
 
 ICompact* ICompact::createCompactSpan(ICompact const* op1,
 									  ICompact const* op2,
 									  IMultiIndex const* const grid) {
-	size_t dim = op1->getDim();
-
-	if (!op1 || !op2 || !grid) {
-		Compact::log_warning(RC::NULLPTR_ERROR);
-		return nullptr;
-	}
-	if (dim != op2->getDim() || dim != grid->getDim()) {
-		Compact::log_warning(RC::MISMATCHING_DIMENSIONS);
+	if (!op1 || !op2) {
+		log_warning(RC::NULLPTR_ERROR);
 		return nullptr;
 	}
 
-	IVector *lb1, *lb2, *rb1, *rb2;
-	op1->getLeftBoundary(lb1);
-	op2->getLeftBoundary(lb2);
-	op1->getRightBoundary(rb1);
-	op2->getRightBoundary(rb2);
-	double* spanLeft = new (std::nothrow) double[dim];
-	double* spanRight = new (std::nothrow) double[dim];
+	Compact::CompactDef def1;
+	op1->getLeftBoundary(def1.minBound);
+	op1->getRightBoundary(def1.maxBound);
 
-	if (!lb1 || !lb2 || !rb1 || !rb2 || !spanLeft || !spanRight) {
-		Compact::log_warning(RC::ALLOCATION_ERROR);
+	Compact::CompactDef def2;
+	op2->getLeftBoundary(def2.minBound);
+	op2->getRightBoundary(def2.maxBound);
 
-		delete lb1;
-		delete lb2;
-		delete rb1;
-		delete rb2;
-		delete[] spanLeft;
-		delete[] spanRight;
+	Compact::CompactDef spanDef;
+	spanDef.minBound = VectorUtils::min(def1.minBound, def2.minBound);
+	spanDef.maxBound = VectorUtils::max(def1.maxBound, def2.maxBound);
+	spanDef.nodeQuantities = grid->clone();
+
+	if (!spanDef.isValid()) {
+		def1.clear();
+		def2.clear();
+		spanDef.clear();
+
 		return nullptr;
 	}
 
-	const double* lb1Data = lb1->getData();
-	const double* lb2Data = lb2->getData();
-	const double* rb1Data = rb1->getData();
-	const double* rb2Data = rb2->getData();
-	for (size_t i = 0; i < dim; i++) {
-		spanLeft[i] = fmin(lb1Data[i], lb2Data[i]);
-		spanRight[i] = fmax(rb1Data[i], rb2Data[i]);
-	}
-	IVector* spanLeftVec = IVector::createVector(dim, spanLeft);
-	IVector* spanRightVec = IVector::createVector(dim, spanRight);
-
-	if (!spanLeftVec || !spanRightVec) {
-		delete lb1;
-		delete lb2;
-		delete rb1;
-		delete rb2;
-		delete[] spanLeft;
-		delete[] spanRight;
-		delete spanLeftVec;
-		delete spanRightVec;
-		return nullptr;
+	auto span = Compact::createCompact(spanDef);
+	if (!span) {
+		log_warning(RC::ALLOCATION_ERROR);
+		spanDef.clear();
 	}
 
-	ICompact* span = ICompact::createCompact(spanLeftVec, spanRightVec, grid);
-	delete lb1;
-	delete lb2;
-	delete rb1;
-	delete rb2;
-	delete[] spanLeft;
-	delete[] spanRight;
-	delete spanLeftVec;
-	delete spanRightVec;
+	def1.clear();
+	def2.clear();
 	return span;
 }
 
@@ -326,187 +262,95 @@ ICompact* ICompact::createCompact(const IVector* vec1,
 	return Compact::createCompact(vec1, vec2, nodeQuantities);
 }
 
-RC ICompact::setLogger(ILogger* const logger) { return LogProducer<Compact>::setLogger(logger); }
-ILogger* ICompact::getLogger() { return LogProducer<Compact>::getLogger(); }
+RC ICompact::setLogger(ILogger* const logger) { return LogContainer<Compact>::setInstance(logger); }
+ILogger* ICompact::getLogger() { return LogContainer<Compact>::getInstance(); }
 
 ICompact::~ICompact() = default;
 
 Compact::~Compact() {
 	m_controlBlock->invalidateCompact();
 
-	delete m_lowerBound;
-	delete m_upperBound;
+	delete m_minBound;
+	delete m_maxBound;
 	delete m_nodeQuantities;
 }
 
-
-ICompact::IIterator* Compact::getEnd(const IMultiIndex* const& bypassOrder) const {
+bool Compact::isIndexValid(const IMultiIndex* index) const {
 	size_t dim = getDim();
-
-	if (dim != bypassOrder->getDim()) {
+	if (index->getDim() != dim) {
 		log_warning(RC::MISMATCHING_DIMENSIONS);
-		return nullptr;
+		return false;
 	}
 
-	size_t* place = new (std::nothrow) size_t[dim];
+	auto indexData = index->getData();
+	auto nodeData = m_nodeQuantities->getData();
 
-	if (!place) {
-		log_warning(RC::ALLOCATION_ERROR);
-		return nullptr;
-	}
-
-	memcpy(place, m_nodeQuantities->getData(), dim * sizeof(size_t));
-	IMultiIndex* iterPlace = IMultiIndex::createMultiIndex(dim, place);
-	IMultiIndex* iterBypass = bypassOrder->clone();
-	delete[] place;
-
-	if (!iterPlace || !iterBypass) {
-		delete iterPlace;
-		delete iterBypass;
-		return nullptr;
-	}
-
-	IVector* vector = nullptr;
-	RC code = getVectorCopy(iterPlace, vector);
-
-	if (code != RC::SUCCESS) {
-		log_warning(code);
-
-		delete iterPlace;
-		delete iterBypass;
-		return nullptr;
-	}
-
-	Iterator* iterator = new (std::nothrow) Iterator(m_controlBlock, iterPlace, iterBypass, vector);
-
-	if (!iterator) {
-		log_warning(RC::ALLOCATION_ERROR);
-
-		delete iterPlace;
-		delete iterBypass;
-		delete vector;
-		return nullptr;
-	}
-
-	return iterator;
-}
-
-int comparator(const void* a, const void* b) { return (int)(*(ssize_t*)a - *(ssize_t*)b); }
-
-// check bypass for multiple indexes and for dimensions
-ICompact::IIterator* Compact::getIterator(const IMultiIndex* const& index,
-										  const IMultiIndex* const& bypassOrder) const {
-
-	size_t dim = bypassOrder->getDim();
-	if (dim != index->getDim()) {
-		log_warning(RC::MISMATCHING_DIMENSIONS);
-		return nullptr;
-	}
-
-	const size_t* place = index->getData();
-	const size_t* grid = m_nodeQuantities->getData();
-	size_t* sortedByPass = new (std::nothrow) size_t[dim];
-
-	if (!sortedByPass) {
-		log_warning(RC::ALLOCATION_ERROR);
-		return nullptr;
-	}
-
-	memcpy(sortedByPass, bypassOrder->getData(), dim * sizeof(size_t));
-	qsort(sortedByPass, dim, sizeof(size_t), comparator);
 	for (size_t i = 0; i < dim; i++) {
-		if (place[i] > grid[i]) {
-			log_warning(RC::SET_INDEX_OVERFLOW);
-			delete[] sortedByPass;
-			return nullptr;
-		}
-
-		if (sortedByPass[i] != i) {
-			log_warning(RC::INVALID_ARGUMENT);
-			delete[] sortedByPass;
-			return nullptr;
+		if (indexData[i] >= nodeData[i]) {
+			return false;
 		}
 	}
-	delete[] sortedByPass;
-
-	IMultiIndex* iterPlace = index->clone();
-	IMultiIndex* iterOrder = bypassOrder->clone();
-
-	if (!iterPlace || !iterOrder) {
-		delete iterPlace;
-		delete iterOrder;
-		return nullptr;
-	}
-
-	IVector* vector = nullptr;
-	RC code = getVectorCopy(iterPlace, vector);
-
-	if (code != RC::SUCCESS) {
-		log_warning(code);
-
-		delete iterPlace;
-		delete iterOrder;
-		return nullptr;
-	}
-
-	auto res = new (std::nothrow) Iterator(m_controlBlock, iterPlace, iterOrder, vector);
-
-	if (!res) {
-		log_warning(RC::ALLOCATION_ERROR);
-
-		delete iterPlace;
-		delete iterOrder;
-		delete vector;
-		return nullptr;
-	}
-
-	return res;
+	return true;
 }
+Compact::Compact(const CompactDef& def) :
+	m_minBound(def.minBound), m_maxBound(def.maxBound), m_nodeQuantities(def.nodeQuantities) {}
 
-ICompact::IIterator* Compact::getBegin(const IMultiIndex* const& bypassOrder) const {
-	size_t dim = getDim();
-
-	if (dim != bypassOrder->getDim()) {
-		log_warning(RC::MISMATCHING_DIMENSIONS);
-		return nullptr;
-	}
-
-	size_t* place = (size_t*)calloc(dim, sizeof(size_t));
-
-	if (!place) {
-		log_warning(RC::ALLOCATION_ERROR);
-		return nullptr;
-	}
-
-	IMultiIndex* iterPlace = IMultiIndex::createMultiIndex(dim, place);
-	free(place);
-
-	if (!iterPlace) {
-		delete iterPlace;
-		return nullptr;
-	}
-
-	IIterator* iterator = getIterator(iterPlace, bypassOrder);
-	delete iterPlace;
-	return iterator;
-}
-
-RC Compact::advance(IMultiIndex* const& place, const IMultiIndex* const& bypassOrder) {
-	auto placeData = place->getData();
+RC Compact::advance(IMultiIndex* const& pos, const IMultiIndex* const& bypassOrder) {
+	auto posData = pos->getData();
 	auto orderData = bypassOrder->getData();
 	auto gridData = m_nodeQuantities->getData();
 
 	for (size_t i = 0; i < bypassOrder->getDim(); i++) {
+		size_t currAxis = orderData[i];
 
-		if (placeData[orderData[i]] == gridData[orderData[i]]) {
-			place->setAxisIndex(orderData[i], 0);
+		if (posData[currAxis] == gridData[currAxis] - 1) {
+			pos->setAxisIndex(currAxis, 0);
 
-		} else if (placeData[orderData[i]] < gridData[orderData[i]]) {
-			place->setAxisIndex(orderData[i], placeData[orderData[i]] + 1);
+		} else {
+			pos->setAxisIndex(currAxis, posData[currAxis] + 1);
 			return RC::SUCCESS;
 		}
 	}
 
-	place->setAxisIndex(0, std::numeric_limits<size_t>::max());
-	return RC::SET_INDEX_OVERFLOW;
+	return RC::INDEX_OUT_OF_BOUND;
+}
+
+bool Compact::isOrderValid(const IMultiIndex* order) const {
+	size_t dim = getDim();
+	if (order->getDim() != dim) {
+		log_warning(RC::MISMATCHING_DIMENSIONS);
+		return false;
+	}
+
+	auto orderData = new (std::nothrow) size_t[dim];
+	if (!orderData) {
+		log_warning(RC::ALLOCATION_ERROR);
+		return false;
+	}
+
+	memcpy(orderData, order->getData(), dim * sizeof(size_t));
+	std::sort(orderData, orderData + dim);
+
+	for (size_t i = 0; i < dim; i++) {
+		if (orderData[i] != i) {
+			delete[] orderData;
+			return false;
+		}
+	}
+
+	delete[] orderData;
+	return true;
+}
+
+bool Compact::CompactDef::isValid() const { return minBound && maxBound && nodeQuantities; }
+
+void Compact::CompactDef::clear() {
+	delete minBound;
+	minBound = nullptr;
+
+	delete maxBound;
+	maxBound = nullptr;
+
+	delete nodeQuantities;
+	nodeQuantities = nullptr;
 }

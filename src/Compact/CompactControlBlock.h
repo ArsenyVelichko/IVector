@@ -5,7 +5,7 @@
 
 class CompactControlBlock : public ICompactControlBlock {
 public:
-	CompactControlBlock(Compact* parent);
+	CompactControlBlock(Compact* compact);
 
 	RC get(IMultiIndex* const& currentIndex, IMultiIndex const* const& bypassOrder) const override;
 	RC get(IMultiIndex const* const& currentIndex, IVector* const& val) const override;

@@ -5,26 +5,23 @@
 #include <ISet.h>
 #include <ISetControlBlock.h>
 
-#include "LogProducer.h"
+#include "LogUtils.h"
 
+using LogUtils::LogContainer;
 class SetControlBlock;
 
-class Set : public ISet, public LogProducer<Set> {
+class Set : public ISet, public LogContainer<Set> {
 public:
 	ISet* clone() const override;
 
 	size_t getDim() const override;
 	size_t getSize() const override;
 	RC getCopy(size_t index, IVector*& val) const override;
-	RC findFirstAndCopy(IVector const* const& pat,
-						IVector::NORM n,
-						double tol,
+	RC findFirstAndCopy(IVector const* const& pat, IVector::NORM n, double tol,
 						IVector*& val) const override;
 
 	RC getCoords(size_t index, IVector* const& val) const override;
-	RC findFirstAndCopyCoords(IVector const* const& pat,
-							  IVector::NORM n,
-							  double tol,
+	RC findFirstAndCopyCoords(IVector const* const& pat, IVector::NORM n, double tol,
 							  IVector* const& val) const override;
 
 	RC findFirst(const IVector* const& pat, IVector::NORM n, double tol) const override;
@@ -34,10 +31,9 @@ public:
 	RC remove(size_t index) override;
 	RC remove(IVector const* const& pat, IVector::NORM n, double tol) override;
 
-	class Iterator : public ISet::IIterator, public LogProducer<Iterator> {
+	class Iterator : public ISet::IIterator, public LogContainer<Iterator> {
 	public:
-		Iterator(const std::shared_ptr<SetControlBlock>& controlBlock,
-				 IVector* vector,
+		Iterator(const std::shared_ptr<SetControlBlock>& controlBlock, IVector* vector,
 				 size_t hash);
 
 		IIterator* getNext(size_t indexInc = 1) const override;
@@ -75,11 +71,12 @@ public:
 	RC getEndVec(IVector* vector, size_t& key);
 
 	static Set* createSet();
-	static IVector* createZeroVec(size_t dim);
 
 	~Set();
 
 private:
+	Set() = default;
+
 	double* m_data = nullptr;
 	size_t* m_hashArr = nullptr;
 	size_t m_topHash = 0;

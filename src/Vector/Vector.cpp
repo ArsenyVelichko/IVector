@@ -2,10 +2,10 @@
 #include <cstring>
 
 #include "Vector.h"
+#include "VectorUtils.h"
 
 using std::isinf;
 using std::isnan;
-using std::memcpy;
 
 Vector* Vector::createVector(size_t dim, double const* const& data) {
 	size_t size = sizeof(Vector) + dim * sizeof(double);
@@ -24,7 +24,7 @@ Vector* Vector::createVector(size_t dim, double const* const& data) {
 	return vector;
 }
 
-ILogger* IVector::getLogger() { return LogProducer<Vector>::getLogger(); }
+ILogger* IVector::getLogger() { return LogContainer<Vector>::getInstance(); }
 
 IVector* Vector::clone() const { return Vector::createVector(m_dim, getData()); }
 
@@ -211,7 +211,7 @@ RC Vector::applyFunction(const std::function<double(double)>& fun) {
 	return RC::SUCCESS;
 }
 
-RC Vector::foreach(const std::function<void(double)>& fun) const {
+RC Vector::foreach (const std::function<void(double)>& fun) const {
 	const double* data = getData();
 	for (size_t i = 0; i < m_dim; i++) {
 		fun(data[i]);
@@ -230,8 +230,8 @@ IVector* IVector::createVector(size_t dim, double const* const& ptr_data) {
 }
 
 RC IVector::copyInstance(IVector* const dest, IVector const* const& src) {
-	if (!dest || ! src) {
-		Vector::log_severe(RC::NULLPTR_ERROR);
+	if (!dest || !src) {
+		log_severe(RC::NULLPTR_ERROR);
 		return RC::NULLPTR_ERROR;
 	}
 
@@ -263,55 +263,24 @@ RC IVector::moveInstance(IVector* const dest, IVector*& src) {
 	return RC::SUCCESS;
 }
 
-RC IVector::setLogger(ILogger* const logger) { return LogProducer<Vector>::setLogger(logger); }
+RC IVector::setLogger(ILogger* const logger) { return LogContainer<Vector>::setInstance(logger); }
 
 IVector* IVector::add(IVector const* const& op1, IVector const* const& op2) {
-	if (!op1 || !op2) {
-		Vector::log_severe(RC::NULLPTR_ERROR);
-		return nullptr;
-	}
-
-	IVector* sum = op1->clone();
-	if (!sum) {
-		return nullptr;
-	}
-
-	RC rc = sum->inc(op2);
-	if (rc != RC::SUCCESS) {
-		delete sum;
-		return nullptr;
-	}
-
-	return sum;
+	return VectorUtils::binaryOp(op1, op2, [](double x, double y) { return x + y; });
 }
 
 IVector* IVector::sub(IVector const* const& op1, IVector const* const& op2) {
-	if (!op1 || !op2) {
-		Vector::log_severe(RC::NULLPTR_ERROR);
-		return nullptr;
-	}
-
-	IVector* diff = op1->clone();
-	if (!diff) {
-		return nullptr;
-	}
-
-	RC rc = diff->dec(op2);
-	if (rc != RC::SUCCESS) {
-		delete diff;
-		return nullptr;
-	}
-	return diff;
+	return VectorUtils::binaryOp(op1, op2, [](double x, double y) { return x - y; });
 }
 
 double IVector::dot(IVector const* const& op1, IVector const* const& op2) {
 	if (!op1 || !op2) {
-		Vector::log_severe(RC::NULLPTR_ERROR);
+		log_severe(RC::NULLPTR_ERROR);
 		return false;
 	}
 
 	if (op1->getDim() != op2->getDim()) {
-		Vector::log_warning(RC::MISMATCHING_DIMENSIONS);
+		log_warning(RC::MISMATCHING_DIMENSIONS);
 		return NAN;
 	}
 
@@ -326,7 +295,7 @@ double IVector::dot(IVector const* const& op1, IVector const* const& op2) {
 	}
 
 	if (isinf(res)) {
-		Vector::log_warning(RC::INFINITY_OVERFLOW);
+		log_warning(RC::INFINITY_OVERFLOW);
 		return NAN;
 	}
 

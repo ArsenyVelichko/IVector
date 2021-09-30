@@ -4,22 +4,89 @@
 #include <cstring>
 #include <limits>
 
+struct Compact::Iterator::IteratorDef {
+	IMultiIndex* order = nullptr;
+	IMultiIndex* pos = nullptr;
+	IVector* vector = nullptr;
+
+	bool isValid() const;
+	void clear();
+};
+
+ICompact::IIterator* Compact::getIterator(const IMultiIndex* const& index,
+										  const IMultiIndex* const& bypassOrder) const {
+	if (!isOrderValid(bypassOrder)) {
+		log_warning(RC::INVALID_ARGUMENT);
+		return nullptr;
+	}
+
+	Iterator::IteratorDef def;
+	def.order = bypassOrder->clone();
+	def.pos = index->clone();
+	getVectorCopy(index, def.vector);
+
+	if (!def.isValid()) {
+		def.clear();
+		return nullptr;
+	}
+
+	auto res = new (std::nothrow) Iterator(def, m_controlBlock);
+	if (!res) {
+		log_warning(RC::ALLOCATION_ERROR);
+		def.clear();
+		return nullptr;
+	}
+
+	return res;
+}
+
+ICompact::IIterator* Compact::getEnd(const IMultiIndex* const& bypassOrder) const {
+	std::shared_ptr<IMultiIndex> endIndex(m_nodeQuantities->clone());
+
+	auto endIndexData = endIndex->getData();
+	for (size_t i = 0; i < getDim(); i++) {
+		endIndex->setAxisIndex(i, endIndexData[i] - 1);
+	}
+
+	return getIterator(endIndex.get(), bypassOrder);
+}
+
+ICompact::IIterator* Compact::getBegin(const IMultiIndex* const& bypassOrder) const {
+	std::shared_ptr<size_t> zeroData(new (std::nothrow) size_t[getDim()]());
+	std::shared_ptr<IMultiIndex> beginIdx(IMultiIndex::createMultiIndex(getDim(), zeroData.get()));
+	return getIterator(beginIdx.get(), bypassOrder);
+}
+
+RC ICompact::IIterator::setLogger(ILogger* const pLogger) {
+	return LogContainer<Compact::Iterator>::setInstance(pLogger);
+}
+
+ILogger* ICompact::IIterator::getLogger() { //
+	return LogContainer<Compact::Iterator>::getInstance();
+}
+
 RC Compact::Iterator::getVectorCopy(IVector*& val) const {
 	if (m_placeChanged) {
-		RC code = m_controlBlock->get(m_place, m_vector);
+		RC code = m_controlBlock->get(m_pos, m_vector);
 		if (code != RC::SUCCESS) {
 			return code;
 		}
 		m_placeChanged = false;
 	}
 
-	val = m_vector->clone();
-	return val ? RC::SUCCESS : RC::ALLOCATION_ERROR;
+	IVector* cloneVec = m_vector->clone();
+
+	if (cloneVec == nullptr) {
+		return RC::ALLOCATION_ERROR;
+	}
+
+	val = cloneVec;
+	return RC::SUCCESS;
 }
 
 RC Compact::Iterator::getVectorCoords(IVector* const& val) const {
-	if (!m_placeChanged) {
-		RC code = m_controlBlock->get(m_place, m_vector);
+	if (m_placeChanged) {
+		RC code = m_controlBlock->get(m_pos, m_vector);
 		if (code != RC::SUCCESS) {
 			return code;
 		}
@@ -30,39 +97,28 @@ RC Compact::Iterator::getVectorCoords(IVector* const& val) const {
 }
 
 ICompact::IIterator* Compact::Iterator::clone() const {
-	IMultiIndex* place = m_place->clone();
-	IMultiIndex* byPass = m_order->clone();
-	IVector* vector = m_vector->clone();
+	IteratorDef def;
 
-	if (!place || !byPass || !vector) {
-		delete place;
-		delete byPass;
-		delete vector;
+	def.pos = m_pos->clone();
+	def.order = m_order->clone();
+	def.vector = m_vector->clone();
+
+	if (!def.isValid()) {
+		def.clear();
 		return nullptr;
 	}
 
-	auto* iterator = new (std::nothrow) Compact::Iterator(m_controlBlock, place, byPass, vector);
+	auto* iterator = new (std::nothrow) Compact::Iterator(def, m_controlBlock);
 
 	if (!iterator) {
-		delete place;
-		delete byPass;
-		delete vector;
+		log_warning(RC::ALLOCATION_ERROR);
+		def.clear();
 		return nullptr;
 	}
 
 	iterator->m_placeChanged = m_placeChanged;
+	iterator->m_isValid = m_isValid;
 	return iterator;
-}
-
-Compact::Iterator::Iterator(std::shared_ptr<CompactControlBlock> const& block,
-							IMultiIndex* startPos,
-							IMultiIndex* byPass,
-							IVector* vector) {
-	m_controlBlock = block;
-	m_place = startPos;
-	m_order = byPass;
-	m_vector = vector;
-	m_placeChanged = true;
 }
 
 ICompact::IIterator* Compact::Iterator::getNext() {
@@ -73,20 +129,41 @@ ICompact::IIterator* Compact::Iterator::getNext() {
 	return copy;
 }
 
-bool Compact::Iterator::isValid() const {
-	return m_isValid;
-}
+Compact::Iterator::Iterator(const IteratorDef& def,
+							const std::shared_ptr<CompactControlBlock>& controlBlock) :
+		m_order(def.order), m_pos(def.pos), m_vector(def.vector), m_controlBlock(controlBlock) {}
+
+bool Compact::Iterator::isValid() const { return m_isValid; }
 
 RC Compact::Iterator::next() {
-	RC code = m_controlBlock->get(m_place, m_order);
-	m_placeChanged = code == RC::SUCCESS;
+	RC code = m_controlBlock->get(m_pos, m_order);
+
+	if (code == RC::SUCCESS) {
+		m_placeChanged = true;
+	} else {
+		m_isValid = false;
+	}
+
 	return code;
+}
+
+bool Compact::Iterator::IteratorDef::isValid() const { return order && pos && vector; }
+
+void Compact::Iterator::IteratorDef::clear() {
+	delete order;
+	order = nullptr;
+
+	delete pos;
+	pos = nullptr;
+
+	delete vector;
+	vector = nullptr;
 }
 
 Compact::Iterator::~Iterator() {
 	delete m_vector;
 	delete m_order;
-	delete m_place;
+	delete m_pos;
 }
 
 ICompact::IIterator::~IIterator() = default;

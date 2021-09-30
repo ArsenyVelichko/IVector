@@ -1,14 +1,15 @@
 #include <cstdint>
 #include <cstring>
+#include <memory>
 
 #include "MultiIndex.h"
 
 RC IMultiIndex::setLogger(ILogger* const logger) {
-	return LogProducer<MultiIndex>::setLogger(logger);
+	return LogContainer<MultiIndex>::setInstance(logger);
 }
 
 ILogger* IMultiIndex::getLogger() { //
-	return LogProducer<MultiIndex>::getLogger();
+	return LogContainer<MultiIndex>::getInstance();
 }
 
 MultiIndex::MultiIndex(size_t dim) { m_dim = dim; }
@@ -49,7 +50,7 @@ RC MultiIndex::setData(size_t dim, const size_t* const& ptr_data) {
 		return RC::MISMATCHING_DIMENSIONS;
 	}
 
-	memcpy(getData(), ptr_data, dim);
+	memcpy(getData(), ptr_data, dim * sizeof(size_t));
 	return RC::SUCCESS;
 }
 

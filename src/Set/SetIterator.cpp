@@ -2,11 +2,11 @@
 #include "SetControlBlock.h"
 
 RC ISet::IIterator::setLogger(ILogger* const logger) {
-	return LogProducer<Set::Iterator>::setLogger(logger);
+	return LogContainer<Set::Iterator>::setInstance(logger);
 }
 
 ILogger* ISet::IIterator::getLogger() { //
-	return LogProducer<Set::Iterator>::getLogger();
+	return LogContainer<Set::Iterator>::getInstance();
 }
 
 Set::Iterator::Iterator(const std::shared_ptr<SetControlBlock>& controlBlock,
@@ -17,8 +17,9 @@ Set::Iterator::Iterator(const std::shared_ptr<SetControlBlock>& controlBlock,
 ISet::IIterator* Set::Iterator::getNext(size_t indexInc) const {
 	auto iterator = clone();
 	if (!iterator) {
-		return iterator;
+		return nullptr;
 	}
+
 	iterator->next(indexInc);
 	return iterator;
 }

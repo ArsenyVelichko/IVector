@@ -3,7 +3,11 @@ project(Interfaces)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_compile_definitions(BUILD_INTERFACES)
+set(BUILD_INTERFACES ON CACHE BOOL "")
+
+if (BUILD_INTERFACES)
+	add_compile_definitions(BUILD_INTERFACES)
+endif()
 
 include_directories(include)
 
@@ -16,9 +20,12 @@ macro(create_lib_subdirectory LIB_NAME)
 
 	add_library(${LIB_NAME} ${SOURCE_FILES})
 	target_include_directories(${LIB_NAME} PRIVATE ${UTILS_DIRECTORY})
+	target_link_libraries(${LIB_NAME} Utils)
 
 	set(EXE_DEPENDENCIES ${EXE_DEPENDENCIES} ${LIB_NAME} PARENT_SCOPE)
 endmacro()
+
+add_subdirectory(src/Utils)
 
 add_subdirectory(src/Vector)
 add_subdirectory(src/Set)

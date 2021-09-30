@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <algorithm>
+
+#include "VectorUtils.h"
 
 #include "Set.h"
 #include "SetControlBlock.h"
@@ -19,7 +21,6 @@ RC Set::getCopy(size_t index, IVector*& val) const {
 
 	IVector* vector = IVector::createVector(m_dim, getData(index));
 	if (!vector) {
-		log_warning(RC::ALLOCATION_ERROR);
 		return RC::ALLOCATION_ERROR;
 	}
 
@@ -33,7 +34,7 @@ RC Set::findFirst(IVector const* pat, IVector::NORM n, double tol, size_t& index
 		return RC::MISMATCHING_DIMENSIONS;
 	}
 
-	auto vec = createZeroVec(m_dim);
+	auto vec = VectorUtils::createZeroVec(m_dim);
 	if (!vec) {
 		return RC::ALLOCATION_ERROR;
 	}
@@ -53,11 +54,6 @@ RC Set::findFirst(IVector const* pat, IVector::NORM n, double tol, size_t& index
 }
 
 double* Set::getData(size_t index) const { return m_data + m_dim * index; }
-
-IVector* Set::createZeroVec(size_t dim) {
-	std::shared_ptr<double> zeroData(new double[dim]());
-	return IVector::createVector(dim, zeroData.get());
-}
 
 RC Set::findFirstAndCopy(IVector const* const& pat,
 						 IVector::NORM n,
@@ -166,7 +162,7 @@ RC Set::remove(size_t index) {
 	}
 
 	if (index != m_size - 1) {
-		size_t nextVecNum = m_size - index + 1;
+		size_t nextVecNum = m_size - index - 1;
 		memmove(getData(index), getData(index + 1), nextVecNum * vecDataSize());
 		memmove(m_hashArr + index, m_hashArr + index + 1, nextVecNum * sizeof(size_t));
 	}
@@ -191,8 +187,8 @@ Set::~Set() {
 	delete[] m_hashArr;
 }
 
-RC ISet::setLogger(ILogger* const logger) { return LogProducer<Set>::setLogger(logger); }
-ILogger* ISet::getLogger() { return LogProducer<Set>::getLogger(); }
+RC ISet::setLogger(ILogger* const logger) { return LogContainer<Set>::setInstance(logger); }
+ILogger* ISet::getLogger() { return LogContainer<Set>::getInstance(); }
 
 ISet* ISet::createSet() { return Set::createSet(); }
 
@@ -201,7 +197,7 @@ ISet* ISet::makeIntersection(ISet const* const& op1,
 							 IVector::NORM n,
 							 double tol) {
 	if (!op1 || !op2) {
-		Set::log_severe(RC::NULLPTR_ERROR);
+		log_severe(RC::NULLPTR_ERROR);
 		return nullptr;
 	}
 
@@ -210,7 +206,7 @@ ISet* ISet::makeIntersection(ISet const* const& op1,
 		return nullptr;
 	}
 
-	IVector* vec = Set::createZeroVec(op1->getDim());
+	IVector* vec = VectorUtils::createZeroVec(op1->getDim());
 	if (!vec) {
 		return nullptr;
 	}
@@ -235,7 +231,7 @@ ISet* ISet::makeIntersection(ISet const* const& op1,
 
 ISet* ISet::makeUnion(ISet const* const& op1, ISet const* const& op2, IVector::NORM n, double tol) {
 	if (!op1 || !op2) {
-		Set::log_severe(RC::NULLPTR_ERROR);
+		log_severe(RC::NULLPTR_ERROR);
 		return nullptr;
 	}
 
@@ -244,7 +240,7 @@ ISet* ISet::makeUnion(ISet const* const& op1, ISet const* const& op2, IVector::N
 		return nullptr;
 	}
 
-	IVector* vec = Set::createZeroVec(op2->getDim());
+	IVector* vec = VectorUtils::createZeroVec(op2->getDim());
 	if (!vec) {
 		return nullptr;
 	}
@@ -266,7 +262,7 @@ ISet* ISet::makeUnion(ISet const* const& op1, ISet const* const& op2, IVector::N
 
 ISet* ISet::sub(ISet const* const& op1, ISet const* const& op2, IVector::NORM n, double tol) {
 	if (!op1 || !op2) {
-		Set::log_severe(RC::NULLPTR_ERROR);
+		log_severe(RC::NULLPTR_ERROR);
 		return nullptr;
 	}
 
@@ -275,7 +271,7 @@ ISet* ISet::sub(ISet const* const& op1, ISet const* const& op2, IVector::NORM n,
 		return nullptr;
 	}
 
-	IVector* vec = Set::createZeroVec(op2->getDim());
+	IVector* vec = VectorUtils::createZeroVec(op2->getDim());
 	if (!vec) {
 		return nullptr;
 	}
@@ -298,8 +294,8 @@ ISet* ISet::sub(ISet const* const& op1, ISet const* const& op2, IVector::NORM n,
 ISet* ISet::symSub(ISet const* const& op1, ISet const* const& op2, IVector::NORM n, double tol) {
 	auto unionSet = makeUnion(op1, op2, n, tol);
 	auto intersectionSet = makeIntersection(op1, op2, n, tol);
-
 	ISet* symSub = sub(unionSet, intersectionSet, n, tol);
+
 	delete unionSet;
 	delete intersectionSet;
 	return symSub;
@@ -350,6 +346,10 @@ RC Set::getNextVec(IVector* vector, size_t& key, size_t inc) {
 	auto it = std::upper_bound(m_hashArr, m_hashArr + m_size, key);
 	it += inc - 1;
 
+	if (it >= m_hashArr + m_size) {
+		return RC::SET_INDEX_OVERFLOW;
+	}
+
 	size_t index = it - m_hashArr;
 	RC rc = getCoords(index, vector);
 	if (rc != RC::SUCCESS) {
@@ -365,7 +365,7 @@ RC Set::getPrevVec(IVector* vector, size_t& key, size_t dec) {
 	it -= dec;
 
 	if (it < m_hashArr) {
-		return RC::INDEX_OUT_OF_BOUND;
+		return RC::SET_INDEX_OVERFLOW;
 	}
 
 	size_t index = it - m_hashArr;
@@ -400,12 +400,15 @@ RC Set::getEndVec(IVector* vector, size_t& key) {
 
 Set* Set::createSet() {
 	auto set = new (std::nothrow) Set();
-	auto controlBlock = new (std::nothrow) SetControlBlock(set);
+	if (!set) {
+		log_warning(RC::ALLOCATION_ERROR);
+		return nullptr;
+	}
 
-	if (!controlBlock || !set) {
+	auto controlBlock = new (std::nothrow) SetControlBlock(set);
+	if (!controlBlock) {
 		log_warning(RC::ALLOCATION_ERROR);
 		delete set;
-		delete controlBlock;
 		return nullptr;
 	}
 
@@ -432,10 +435,6 @@ ISet::IIterator* Set::getIterator(size_t index) const {
 	return iterator;
 }
 
-ISet::IIterator* Set::getBegin() const {
-	return getIterator(0);
-}
+ISet::IIterator* Set::getBegin() const { return getIterator(0); }
 
-ISet::IIterator* Set::getEnd() const {
-	return getIterator(m_size - 1);
-}
+ISet::IIterator* Set::getEnd() const { return getIterator(m_size - 1); }

@@ -1,6 +1,6 @@
 #include "CompactControlBlock.h"
 
-CompactControlBlock::CompactControlBlock(Compact* parent) { m_compact = parent; }
+CompactControlBlock::CompactControlBlock(Compact* compact) : m_compact(compact) {}
 
 void CompactControlBlock::invalidateCompact() { m_compact = nullptr; }
 

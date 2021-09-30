@@ -2,11 +2,13 @@
 
 #include <IMultiIndex.h>
 
-#include "LogProducer.h"
+#include "LogUtils.h"
+
+using LogUtils::LogContainer;
 
 namespace {
 
-	class MultiIndex : public IMultiIndex, public LogProducer<MultiIndex> {
+	class MultiIndex : public IMultiIndex, public LogContainer<MultiIndex> {
 	public:
 		static MultiIndex* createMultiIndex(size_t dim, const size_t* indices);
 

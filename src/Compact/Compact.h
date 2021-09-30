@@ -4,12 +4,17 @@
 
 #include <ICompact.h>
 
-#include "LogProducer.h"
+#include "LogUtils.h"
 
+using LogUtils::LogContainer;
 class CompactControlBlock;
 
-class Compact : public ICompact, public LogProducer<Compact> {
+class Compact : public ICompact, public LogContainer<Compact> {
 public:
+	struct CompactDef;
+
+	static Compact* createCompact(const CompactDef& def);
+
 	static Compact* createCompact(IVector const* vec1,
 								  IVector const* vec2,
 								  IMultiIndex const* nodeQuantities);
@@ -27,12 +32,11 @@ public:
 	RC getLeftBoundary(IVector*& vec) const override;
 	RC getRightBoundary(IVector*& vec) const override;
 
-	class Iterator : public ICompact::IIterator, public LogProducer<Iterator> {
+	class Iterator : public ICompact::IIterator, public LogContainer<Iterator> {
 	public:
-		Iterator(std::shared_ptr<CompactControlBlock> const& block,
-				 IMultiIndex* startPos,
-				 IMultiIndex* byPass,
-				 IVector* vector);
+		struct IteratorDef;
+
+		Iterator(const IteratorDef& def, std::shared_ptr<CompactControlBlock> const& controlBlock);
 
 		bool isValid() const override;
 
@@ -48,7 +52,7 @@ public:
 
 	private:
 		IMultiIndex* m_order;
-		IMultiIndex* m_place;
+		IMultiIndex* m_pos;
 		IVector* m_vector;
 		std::shared_ptr<CompactControlBlock> m_controlBlock;
 
@@ -62,15 +66,18 @@ public:
 	IIterator* getBegin(IMultiIndex const* const& bypassOrder) const override;
 	IIterator* getEnd(IMultiIndex const* const& bypassOrder) const override;
 
-	RC advance(IMultiIndex* const& place, IMultiIndex const* const& bypassOrder);
+	RC advance(IMultiIndex* const& pos, IMultiIndex const* const& bypassOrder);
 
 	~Compact() override;
 
 private:
-	Compact(IVector* vec1, IVector* vec2, IMultiIndex* nodeQuantities);
+	Compact(const CompactDef& def);
 
-	IVector* m_lowerBound;
-	IVector* m_upperBound;
+	bool isIndexValid(const IMultiIndex* index) const;
+	bool isOrderValid(const IMultiIndex* order) const;
+
+	IVector* m_minBound;
+	IVector* m_maxBound;
 	IMultiIndex* m_nodeQuantities;
 	std::shared_ptr<CompactControlBlock> m_controlBlock;
 };

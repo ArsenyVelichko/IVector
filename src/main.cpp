@@ -1,378 +1,330 @@
+#include <cassert>
+#include <cmath>
 #include <iostream>
 #include <limits>
+#include <vector>
+#include <random>
 
-#include "../include/IVector.h"
-#include "../include/ISet.h"
-#include "../include/ICompact.h"
-#include "../include/IBroker.h"
-#include "../include/IDiffProblem.h"
-#include "../include/ISolver.h"
+#include <ICompact.h>
+#include <ISet.h>
+#include <IVector.h>
 
 using namespace std;
 
-/*** vector testing section ***/
+void printVector(IVector* vector) {
+	function<void(double)> print = [](double x) { cout << x << ' '; };
+	cout << "( ";
+	vector->foreach (print);
+	cout << ")" << endl;
+}
 
-void vectorTest(ILogger* logger) {
-	double data1[] = {1, 2, 3};
-	double data2[] = {-1, -2, -3};
-	IVector* vec1 = IVector::createVector(3, data1);
-	IVector* vec2 = IVector::createVector(3, data2);
-	IVector* bufVec;
-	function<void(double)> print = [](double num) { std::cout << num << ' '; };
-	IVector::setLogger(logger);
+void printBool(bool x) {
+	cout << (x ? "true" : "false") << endl;
+}
 
-	cout << "vec1: ";
-	vec1->foreach (print);
-	cout << "\nvec2: ";
-	vec2->foreach (print);
+bool fuzzyCompare(double x, double y, double tol) { return fabs(x - y) < tol; }
 
-	cout << endl;
+void vectorTest() {
+	double tol = 1.0e-10;
+	size_t dim = 3;
 
-	bufVec = IVector::sub(vec1, vec2);
-	cout << "\nvec1 - vec2 = ";
-	bufVec->foreach (print);
-	delete bufVec;
+	IVector* vec1 = IVector::createVector(dim, vector<double>{1, 2, 3}.data());
+	IVector* vec2 = IVector::createVector(dim, vector<double>{-1, -2, -3}.data());
 
-	cout << "\n(vec1,vec2) = " << IVector::dot(vec1, vec2) << endl;
+	cout << "Vector A: ";
+	printVector(vec1);
 
-	cout << "\n||vec1||_1 = " << vec1->norm(IVector::NORM::FIRST) << endl;
-	cout << "||vec2||_inf = " << vec2->norm(IVector::NORM::CHEBYSHEV) << endl;
+	cout << "Vector B: ";
+	printVector(vec2);
 
-	cout << endl;
-	cout << "Setting coord 1 in vec2 to 16" << endl;
-	vec2->setCoord(1, 16);
-	cout << "Setting coord 5 in vec1 to 0" << endl;
-	vec1->setCoord(5, 0);
+	IVector* subRes = IVector::sub(vec1, vec2);
+	IVector* correctSubRes = IVector::createVector(dim, vector<double>{2, 4, 6}.data());
+	cout << "Subtraction: ";
+	printVector(subRes);
+	assert(IVector::equals(subRes, correctSubRes, IVector::NORM::SECOND, tol));
 
-	cout << "vec1: ";
-	vec1->foreach (print);
-	cout << "\nvec2: ";
-	vec2->foreach (print);
+	delete subRes;
+	delete correctSubRes;
 
-	cout << endl;
-	cout << "\nvec1 memory allocated: " << vec1->sizeAllocated() << " bytes" << endl;
-	cout << "Copying vec2 to vec1" << endl;
-	IVector::copyInstance(vec1, vec2);
-	cout << "vec1: ";
-	vec1->foreach (print);
-	cout << "\nvec2: ";
-	vec2->foreach (print);
+	double dotProduct = IVector::dot(vec1, vec2);
+	cout << "Dot product: " << dotProduct << endl;
+	assert(fuzzyCompare(dotProduct, -14, tol));
 
-	cout << endl;
-	delete vec1;
+	double firstNorm = vec1->norm(IVector::NORM::FIRST);
+	cout << "First norm of Vector A: " << firstNorm << endl;
+	assert(fuzzyCompare(firstNorm, 6, tol));
+
+	double infiniteNorm = vec2->norm(IVector::NORM::CHEBYSHEV);
+	cout << "Infinite norm of Vector B: " << infiniteNorm << endl;
+	assert(fuzzyCompare(infiniteNorm, 3, tol));
+
+	cout << "Setting coord 1 of Vector B to -7 :";
+	vec2->setCoord(1, -7);
+	IVector* correctSetRes = IVector::createVector(dim, vector<double>{-1, -7, -3}.data());
+	printVector(vec2);
+	assert(IVector::equals(vec2, correctSetRes, IVector::NORM::SECOND, tol));
+
+	delete correctSetRes;
+
+	vec1->inc(vec2);
+	IVector* correctIncRes = IVector::createVector(dim, vector<double>{0, -5, 0}.data());
+	cout << "Incrementing Vector A with Vector B: ";
+	printVector(vec1);
+	assert(IVector::equals(vec1, correctIncRes, IVector::NORM::SECOND, tol));
+
+	delete correctIncRes;
+
+	cout << "Copying Vector A to Vector B: ";
+	IVector::copyInstance(vec2, vec1);
+	printVector(vec2);
+	assert(IVector::equals(vec2, vec1, IVector::NORM::SECOND, tol));
+
+	cout << "Moving Vector A to Vector B: ";
+	IVector::moveInstance(vec2, vec1);
+	printVector(vec2);
+	assert(vec1 == nullptr);
+
+	double inf = std::numeric_limits<double>::infinity();
+	cout << "Trying set infinity coord value in Vector B: ";
+	RC rc = vec2->setCoord(1, inf);
+	printVector(vec2);
+	assert(rc != RC::SUCCESS);
+
 	delete vec2;
 
-	data1[0] = numeric_limits<double>::infinity();
-	cout << "Trying to construct a vector using array { " << data1[0] << " , " << data1[1] << " , "
-		 << data1[2] << " }" << endl;
-	vec1 = IVector::createVector(3, data1);
-
-	cout << "\nIVector::createVector() returned " << vec1 << endl;
-	cout << "\nTest is finished" << endl;
+	cout << "Vector test successfully finished\n\n";
 }
 
-/*** set testing section ***/
-
-constexpr size_t vecNum = 10;
-constexpr size_t dim = 3;
-
-void freeVecs(IVector** arr) {
-	for (size_t i = 0; i < vecNum; i++) {
-		delete arr[i];
-	}
-}
-
-bool printSetContent(ISet* set, function<void(double)>& printer) {
+void printSet(ISet* set) {
 	if (set->getSize() == 0) {
-		cout << "{ empty set }" << endl;
-		return true;
+		cout << "[ empty ]" << endl;
+		return;
 	}
-	auto iter = set->getBegin();
-	if (!iter) {
-		return false;
+
+	IVector* vec;
+
+	cout << "[ " << endl;
+
+	auto it = set->getBegin();
+	for (; it->isValid(); it->next()) {
+		it->getVectorCopy(vec);
+		printVector(vec);
+		delete vec;
 	}
-	double coords[dim] = {0};
-	IVector* vec = IVector::createVector(dim, coords);
-	if (!vec) {
-		delete iter;
-		return false;
-	}
-	cout << '{' << endl;
-	while (iter->isValid()) {
-		iter->getVectorCoords(vec);
-		cout << "{ ";
-		vec->foreach (printer);
-		cout << '}' << endl;
-		iter->next();
-	}
-	cout << '}' << endl;
-	delete vec;
-	delete iter;
-	return true;
+	delete it;
+
+	cout << "]" << endl;
 }
 
-void setTest(ILogger* logger) {
-	IVector* vecArray[vecNum] = {nullptr};
-	double coords[dim] = {0};
-	function<void(double)> print = [](double num) { std::cout << num << ' '; };
-	IVector::setLogger(logger);
-	ISet::setLogger(logger);
-	for (int i = 0; i < vecNum; i++) {
-		for (int j = 0; j < dim; j++) {
-			coords[j] = i - j;
-		}
-		vecArray[i] = IVector::createVector(dim, coords);
-		if (!vecArray[i]) {
-			freeVecs(vecArray);
-			cout << "Test failed: not enough heap memory" << endl;
-			return;
-		}
-		cout << "vec_" << i << " = { ";
-		vecArray[i]->foreach (print);
-		cout << "}" << endl;
-	}
-	cout << "Inserting vectors to set1" << endl;
+void setTest() {
+	std::random_device rd;
+	std::default_random_engine eng(rd());
+	std::uniform_real_distribution<double> distr(-100, 100);
+
+	size_t dim = 4;
+	size_t vecNum = 5;
+	double tol = 1.0e-10;
+
+	cout << "Creating Set A: " << endl;
+
 	ISet* set1 = ISet::createSet();
-	if (!set1) {
-		cout << "Test failed: not enough heap memory" << endl;
-		freeVecs(vecArray);
-		return;
-	}
-	for (auto vec : vecArray) {
-		RC code = set1->insert(vec, IVector::NORM::FIRST, 1.0);
-		if (code != RC::SUCCESS) {
-			cout << "Test failed with error" << endl;
-			logger->severe(code);
-			freeVecs(vecArray);
-			delete set1;
-			return;
+	for (int i = 0; i < vecNum; i++) {
+		vector<double> coords(dim);
+
+		for (int j = 0; j < dim; j++) {
+			coords[j] = distr(eng);
 		}
+
+		auto vector = IVector::createVector(dim, coords.data());
+		assert(set1->insert(vector, IVector::NORM::SECOND, tol) == RC::SUCCESS);
+		delete vector;
 	}
-	cout << "Set1 content: ";
-	if (!printSetContent(set1, print)) {
-		cout << "set printing error, test is failed" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		return;
-	}
-	cout << "This output was generated using set iterator" << endl;
-	cout << "Cloning set1 to set2" << endl;
-	ISet* set2 = set1->clone();
-	if (!set2) {
-		cout << "Test failed: not enough heap memory" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		return;
-	}
-	cout << "Result of the operation \"is set1 equals to set2\": "
-		 << ISet::equals(set1, set2, IVector::NORM::SECOND, 0.01) << endl;
-	cout << "Deleting all vectors that are similar to {7, 6, 5} with infinite norm and tolerance 1"
-		 << endl;
-	set1->remove(vecArray[vecNum - 3], IVector::NORM::CHEBYSHEV, 1.0);
-	cout << "Set1 content: ";
-	if (!printSetContent(set1, print)) {
-		cout << "set printing error, test is failed" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		delete set2;
-		return;
-	}
-	cout << "Set2 content: ";
-	if (!printSetContent(set2, print)) {
-		cout << "set printing error, test is failed" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		delete set2;
-		return;
-	}
-	cout << "Union of set1 and set2: ";
-	ISet* set3 = ISet::makeUnion(set1, set2, IVector::NORM::SECOND, 0.01);
-	if (!set3) {
-		cout << "Test failed: not enough heap memory" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		delete set2;
-		return;
-	}
-	if (!printSetContent(set3, print)) {
-		cout << "set printing error, test is failed" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		delete set2;
-		return;
-	}
-	delete set3;
-	cout << "Intersection of set1 and set2: ";
-	set3 = ISet::makeIntersection(set1, set2, IVector::NORM::SECOND, 0.01);
-	if (!set3) {
-		cout << "Test failed: not enough heap memory" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		delete set2;
-		return;
-	}
-	if (!printSetContent(set3, print)) {
-		cout << "set printing error, test is failed" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		delete set2;
-		return;
-	}
-	delete set3;
-	cout << "Difference of set1 and set2: ";
-	set3 = ISet::sub(set1, set2, IVector::NORM::SECOND, 0.01);
-	if (!set3) {
-		cout << "Test failed: not enough heap memory" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		delete set2;
-		return;
-	}
-	if (!printSetContent(set3, print)) {
-		cout << "set printing error, test is failed" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		delete set2;
-		return;
-	}
-	delete set3;
-	cout << "Symmetric difference of set1 and set2: ";
-	set3 = ISet::symSub(set1, set2, IVector::NORM::SECOND, 0.01);
-	if (!set3) {
-		cout << "Test failed: not enough heap memory" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		delete set2;
-		return;
-	}
-	if (!printSetContent(set3, print)) {
-		cout << "set printing error, test is failed" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		delete set2;
-		return;
-	}
-	delete set3;
-	cout << "Result of the operation \"is set1 subset of set2\": " << ISet::subSet(set1, set2, IVector::NORM::SECOND, 0.01) << endl;
-	cout << "Adding vector {0, 0, 0} to set1" << endl;
-	coords[0] = coords[1] = coords[2] = 0;
-	vecArray[0]->setData(dim, coords);
-	if (set1->insert(vecArray[0], IVector::NORM::SECOND, 0.01) != RC::SUCCESS) {
-		cout << "Test failed: troubles with inserting" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		delete set2;
-		return;
-	}
-	cout << "Result of the operation \"is set1 subset of set2\": " << ISet::subSet(set1, set2, IVector::NORM::SECOND, 0.01) << endl;
-//	cout << "Inserting 10000 vectors to set2" << endl;
-//	for (int i = 0; i < 10000; i++) {
-//		coords[0] = (i * i - 7 * i + 3) % 1301;
-//		coords[1] = (-3 * i * i + 255 * i + 32) % 1553;
-//		coords[2] = (i * i - 7833 * i - 98) % 1217;
-//		vecArray[0]->setData(dim, coords);
-//		RC code = set2->insert(vecArray[0], IVector::NORM::SECOND, 0.01);
-//		if (code != RC::SUCCESS) {
-//			logger->severe(code);
-//			break;
-//		}
-//		if (i % 1000 == 0) {
-//			cout << '.';
-//			cout.flush();
-//		}
-//	}
-//	cout << endl;
-//	cout << "Set2 size: " << set2->getSize() << endl;
-	cout << "Deleting set2" << endl;
-	delete set2;
-	cout << "Set1 content: ";
-	if (!printSetContent(set1, print)) {
-		cout << "\nSet printing error, test is failed" << endl;
-		freeVecs(vecArray);
-		delete set1;
-		return;
-	}
-	cout << "Getting iterator to the element with index 3" << endl;
-	auto iterator = set1->getIterator(3);
-	if (!iterator) {
-		cout << "\nUnable to get iterator. Test error" << endl;
-		delete set1;
-		freeVecs(vecArray);
-		return;
-	}
-	cout << "Vector inside iterator: { ";
-	IVector* vec = nullptr;
-	if (iterator->getVectorCopy(vec) != RC::SUCCESS) {
-		cout << "\nUnable to get vector from the iterator. Test error" << endl;
-		delete set1;
-		freeVecs(vecArray);
-		return;
-	}
-	vec->foreach(print);
-	cout << "}\nDeleting vector with index 3 from the set" << endl;
+	printSet(set1);
+	assert(set1->getDim() == dim);
+	assert(set1->getSize() == vecNum);
+
+	cout << "Cloning Set A as Set B:" << endl;
+	auto set2 = set1->clone();
+	printSet(set2);
+
+	cout << "Removing vector with index 3:" << endl;
+	IVector* removedVec;
+	set1->getCopy(3, removedVec);
 	set1->remove(3);
-	cout << "Vector inside iterator: { ";
-	if (iterator->getVectorCoords(vec) != RC::SUCCESS) {
-		cout << "\nUnable to get vector from the iterator. Test error" << endl;
-		delete set1;
-		freeVecs(vecArray);
-		return;
-	}
-	vec->foreach(print);
-	cout << "}\nMoving iterator forward" << endl;
-	iterator->next();
-	cout << "Vector inside iterator: { ";
-	if (iterator->getVectorCoords(vec) != RC::SUCCESS) {
-		cout << "Unable to get vector from the iterator. Test error" << endl;
-		delete set1;
-		freeVecs(vecArray);
-		return;
-	}
-	vec->foreach(print);
-	cout << "}\nMoving iterator back" << endl;
-	iterator->previous();
-	cout << "Vector inside iterator: { ";
-	if (iterator->getVectorCoords(vec) != RC::SUCCESS) {
-		cout << "Unable to get vector from the iterator. Test error" << endl;
-		delete set1;
-		freeVecs(vecArray);
-		return;
-	}
-	vec->foreach(print);
-	cout << '}' << endl;
-	cout << "Set1 content: ";
-	if (!printSetContent(set1, print)) {
-		cout << "\nSet printing error, test is failed" << endl;
-		freeVecs(vecArray);
-		delete iterator;
-		delete vec;
-		delete set1;
-		return;
-	}
-	cout << "Printing only vectors with even indexes in set1 (using iterators): {" << endl;
-	iterator->makeBegin();
-	while (iterator->isValid()) {
-		iterator->getVectorCoords(vec);
-		cout << "{ ";
-		vec->foreach(print);
-		cout << "}" << endl;
-		iterator->next(2);
-	}
-	cout << "}\n\nTest is finished successfully" << endl;
-	delete iterator;
-	delete vec;
+	printSet(set1);
+	assert(set1->getSize() == vecNum - 1);
+	assert(set1->findFirst(removedVec, IVector::NORM::SECOND, tol) != RC::SUCCESS);
+
+	cout << "Intersection of Set A and Set B: " << endl;
+	auto intersection = ISet::makeIntersection(set1, set2, IVector::NORM::SECOND, tol);
+	printSet(intersection);
+	assert(ISet::equals(intersection, set1, IVector::NORM::SECOND, tol));
+	delete intersection;
+
+	cout << "Union of Set A and Set B: " << endl;
+	auto unionRes = ISet::makeUnion(set1, set2, IVector::NORM::SECOND, tol);
+	printSet(unionRes);
+	assert(ISet::equals(unionRes, set2, IVector::NORM::SECOND, tol));
+	delete unionRes;
+
+	cout << "Subtraction of Set A and Set B: " << endl;
+	auto sub = ISet::sub(set1, set2, IVector::NORM::SECOND, tol);
+	printSet(sub);
+	assert(sub->getSize() == 0);
+	delete sub;
+
+	cout << "Symmetric Subtraction of Set A and Set B: " << endl;
+	auto sumSub = ISet::symSub(set2, set1, IVector::NORM::SECOND, tol);
+	printSet(sumSub);
+	assert(sumSub->getSize() == 1);
+	assert(sumSub->findFirst(removedVec, IVector::NORM::SECOND, tol) == RC::SUCCESS);
+	delete sumSub;
+
+	delete removedVec;
+
+	cout << "Set A is subset of Set B: ";
+	bool isSubset = ISet::subSet(set1, set2, IVector::NORM::SECOND, tol);
+	printBool(isSubset);
+	assert(isSubset == true);
+
+	cout << "Set B is subset of Set A: ";
+	isSubset = ISet::subSet(set2, set1, IVector::NORM::SECOND, tol);
+	printBool(isSubset);
+	assert(isSubset == false);
+
 	delete set1;
-	freeVecs(vecArray);
+	delete set2;
+
+	cout << "Set test successfully finished\n\n";
+}
+
+void printCompact(ICompact* compact, IMultiIndex* byPass) {
+	ICompact::IIterator* it = compact->getBegin(byPass);
+	IVector* vec;
+
+	cout << "{ " << endl;
+	for (; it->isValid(); it->next()) {
+		it->getVectorCopy(vec);
+		printVector(vec);
+		delete vec;
+	}
+	cout << "}" << endl;
+
+	delete it;
+}
+
+void compactTest(ILogger* logger) {
+	size_t dim = 2;
+	double tol = 1.0e-10;
+
+	IMultiIndex* steps = IMultiIndex::createMultiIndex(dim, vector<size_t>{3, 2}.data());
+
+	IVector* bound1 = IVector::createVector(dim, vector<double>{1, 5}.data());
+	IVector* bound2 = IVector::createVector(dim, vector<double>{-4, 2}.data());
+
+	IMultiIndex* order = IMultiIndex::createMultiIndex(dim, vector<size_t>{0, 1}.data());
+
+	cout << "Creating Compact A:" << endl;
+	ICompact* compact1 = ICompact::createCompact(bound1, bound2, steps);
+	printCompact(compact1, order);
+	assert(compact1->getDim() == dim);
+
+	cout << "Compact A with reverse iteration:" << endl;
+	order->setAxisIndex(0, 1);
+	order->setAxisIndex(1, 0);
+	printCompact(compact1, order);
+
+	cout << "Trying to create iterator with invalid order: ";
+	order->setAxisIndex(0, 1);
+	order->setAxisIndex(1, 1);
+	assert(compact1->getBegin(order) == nullptr);
+	cout << "failed" << endl;
+	order->setAxisIndex(0, 0);
+
+	steps->setAxisIndex(0, 3);
+	steps->setAxisIndex(1, 2);
+	bound1->setCoord(0, -3);
+	bound1->setCoord(1, 5);
+	bound2->setCoord(0, 2);
+	bound2->setCoord(1, 10);
+
+	cout << "Creating Compact B:" << endl;
+	ICompact* compact2 = ICompact::createCompact(bound1, bound2, steps);
+	printCompact(compact2, order);
+	assert(compact2->getDim() == dim);
+
+	steps->setAxisIndex(1, 3);
+
+	cout << "Intersection of Compact A and Compact B:" << endl;
+	auto intersection = ICompact::createIntersection(compact1, compact2, steps, tol);
+	printCompact(intersection, order);
+
+	IVector* minBound;
+	intersection->getLeftBoundary(minBound);
+	IVector* correctMinBound = IVector::createVector(dim, vector<double>{-3, 5}.data());
+	assert(IVector::equals(correctMinBound, minBound, IVector::NORM::SECOND, tol));
+
+	delete correctMinBound;
+	delete minBound;
+
+	IVector* maxBound;
+	intersection->getRightBoundary(maxBound);
+	IVector* correctMaxBound = IVector::createVector(dim, vector<double>{1, 5}.data());
+	assert(IVector::equals(correctMaxBound, maxBound, IVector::NORM::SECOND, tol));
+
+	delete correctMaxBound;
+	delete maxBound;
+
+	delete intersection;
+
+	cout << "Span of Compact A and Compact B:" << endl;
+	auto span = ICompact::createCompactSpan(compact1, compact2, steps);
+	printCompact(span, order);
+
+	delete span;
+
+	cout << "Is point inside Compact A: ";
+	auto vec = IVector::createVector(dim, vector<double>{1, 1}.data());
+	printVector(vec);
+	bool isInside = compact1->isInside(vec);
+	printBool(isInside);
+	assert(isInside == false);
+
+	cout << "Is point inside Compact A: ";
+	vec->setCoord(1, 3);
+	printVector(vec);
+	isInside = compact1->isInside(vec);
+	printBool(isInside);
+	assert(isInside == true);
+
+	delete vec;
+
+	delete compact1;
+	delete compact2;
+	delete order;
+	delete steps;
+	delete bound1;
+	delete bound2;
 }
 
 int main() {
 	ILogger* logger = ILogger::createLogger("Log.txt");
 
+	IVector::setLogger(logger);
+	ISet::setLogger(logger);
+	ISet::IIterator::setLogger(logger);
+	ICompact::setLogger(logger);
+	ICompact::IIterator::setLogger(logger);
+	IMultiIndex::setLogger(logger);
+
 	cout << "### Vector test ###\n\n";
-	vectorTest(logger);
+	vectorTest();
 
 	cout << "### Set test ###\n\n";
-	setTest(logger);
+	setTest();
+
+	cout << "### Compact test ###\n\n";
+	compactTest(logger);
 
 	return 0;
 }

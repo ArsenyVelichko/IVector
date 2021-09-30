@@ -1,13 +1,13 @@
 #pragma once
 #include <IVector.h>
 
-#include "LogProducer.h"
+#include "LogUtils.h"
 
-constexpr int foo() { return 0; }
+using LogUtils::LogContainer;
 
 namespace {
 
-	class Vector : public IVector, public LogProducer<Vector> {
+	class Vector : public IVector, public LogContainer<Vector> {
 	public:
 		IVector* clone() const override;
 		double const* getData() const override;
