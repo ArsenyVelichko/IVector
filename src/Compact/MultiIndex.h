@@ -23,10 +23,8 @@ namespace {
 
 		RC incAxisIndex(size_t axisIndex, size_t val) override;
 
-		~MultiIndex() override;
-
 	private:
-		MultiIndex(size_t dim);
+		explicit MultiIndex(size_t dim);
 
 		size_t* getData();
 

@@ -52,9 +52,13 @@ ICompact::IIterator* Compact::getEnd(const IMultiIndex* const& bypassOrder) cons
 }
 
 ICompact::IIterator* Compact::getBegin(const IMultiIndex* const& bypassOrder) const {
-	std::shared_ptr<size_t> zeroData(new (std::nothrow) size_t[getDim()]());
-	std::shared_ptr<IMultiIndex> beginIdx(IMultiIndex::createMultiIndex(getDim(), zeroData.get()));
-	return getIterator(beginIdx.get(), bypassOrder);
+	auto zeroData = new (std::nothrow) size_t[getDim()]();
+	auto beginIdx = IMultiIndex::createMultiIndex(getDim(), zeroData);
+	auto it = getIterator(beginIdx, bypassOrder);
+
+	delete[] zeroData;
+	delete beginIdx;
+	return it;
 }
 
 RC ICompact::IIterator::setLogger(ILogger* const pLogger) {

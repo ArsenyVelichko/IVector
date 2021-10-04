@@ -20,5 +20,3 @@ RC CompactControlBlock::get(const IMultiIndex* const& currentIndex, IVector* con
 }
 
 ICompactControlBlock::~ICompactControlBlock() = default;
-
-CompactControlBlock::~CompactControlBlock() = default;

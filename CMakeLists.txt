@@ -31,6 +31,7 @@ add_subdirectory(src/Vector)
 add_subdirectory(src/Set)
 add_subdirectory(src/Logger)
 add_subdirectory(src/Compact)
+add_subdirectory(src/Problem)
 
 message(STATUS "${EXE_DEPENDENCIES}")
 

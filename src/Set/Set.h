@@ -36,12 +36,12 @@ public:
 		Iterator(const std::shared_ptr<SetControlBlock>& controlBlock, IVector* vector,
 				 size_t hash);
 
-		IIterator* getNext(size_t indexInc = 1) const override;
-		IIterator* getPrevious(size_t indexInc = 1) const override;
+		IIterator* getNext(size_t indexInc) const override;
+		IIterator* getPrevious(size_t indexInc) const override;
 		IIterator* clone() const override;
 
-		RC next(size_t indexInc = 1) override;
-		RC previous(size_t indexInc = 1) override;
+		RC next(size_t indexInc) override;
+		RC previous(size_t indexInc) override;
 
 		bool isValid() const override;
 
@@ -72,7 +72,7 @@ public:
 
 	static Set* createSet();
 
-	~Set();
+	~Set() override;
 
 private:
 	Set() = default;

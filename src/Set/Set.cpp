@@ -103,8 +103,8 @@ RC Set::getCoords(size_t index, IVector* const& val) const {
 bool Set::enlarge() {
 	size_t newSize = std::max(size_t(1), m_capacity * 2);
 
-	double* newData = new (std::nothrow) double[newSize * m_dim];
-	size_t* newHash = new (std::nothrow) size_t[newSize];
+	auto newData = new (std::nothrow) double[newSize * m_dim];
+	auto newHash = new (std::nothrow) size_t[newSize];
 
 	if (!newData || !newHash) {
 		delete[] newData;

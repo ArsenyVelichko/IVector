@@ -307,7 +307,7 @@ RC Compact::advance(IMultiIndex* const& pos, const IMultiIndex* const& bypassOrd
 			pos->setAxisIndex(currAxis, 0);
 
 		} else {
-			pos->setAxisIndex(currAxis, posData[currAxis] + 1);
+			pos->incAxisIndex(currAxis, 1);
 			return RC::SUCCESS;
 		}
 	}

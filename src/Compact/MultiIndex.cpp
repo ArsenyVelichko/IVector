@@ -16,14 +16,14 @@ MultiIndex::MultiIndex(size_t dim) { m_dim = dim; }
 
 MultiIndex* MultiIndex::createMultiIndex(size_t dim, const size_t* indices) {
 	size_t size = sizeof(MultiIndex) + dim * sizeof(size_t);
-	uint8_t* mem = new (std::nothrow) uint8_t[size];
+	auto mem = new (std::nothrow) uint8_t[size];
 
 	if (!mem) {
 		log_warning(RC::ALLOCATION_ERROR);
 		return nullptr;
 	}
 
-	MultiIndex* mi = new (mem) MultiIndex(dim);
+	auto mi = new (mem) MultiIndex(dim);
 	mi->setData(dim, indices);
 	return mi;
 }
@@ -83,8 +83,6 @@ RC MultiIndex::incAxisIndex(size_t axisIndex, size_t val) {
 	getData()[axisIndex] += val;
 	return RC::SUCCESS;
 }
-
-MultiIndex::~MultiIndex() = default;
 
 IMultiIndex* IMultiIndex::createMultiIndex(size_t dim, const size_t* indices) {
 	return MultiIndex::createMultiIndex(dim, indices);

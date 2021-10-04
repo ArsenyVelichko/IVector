@@ -71,7 +71,7 @@ public:
 	~Compact() override;
 
 private:
-	Compact(const CompactDef& def);
+	explicit Compact(const CompactDef& def);
 
 	bool isIndexValid(const IMultiIndex* index) const;
 	bool isOrderValid(const IMultiIndex* order) const;

@@ -2,8 +2,10 @@
 #include "LogUtils.h"
 
 IVector* VectorUtils::createZeroVec(size_t dim) {
-	std::shared_ptr<double[]> zeroData(new (std::nothrow) double[dim]());
-	return IVector::createVector(dim, zeroData.get());
+	auto zeroData = new (std::nothrow) double[dim]();
+	auto vec = IVector::createVector(dim, zeroData);
+	delete[] zeroData;
+	return vec;
 }
 
 IVector* VectorUtils::binaryOp(const IVector* a, const IVector* b, const BinaryOp& op) {

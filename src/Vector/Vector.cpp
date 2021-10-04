@@ -221,8 +221,6 @@ RC Vector::foreach (const std::function<void(double)>& fun) const {
 
 size_t Vector::sizeAllocated() const { return sizeof(Vector) + m_dim * sizeof(double); }
 
-Vector::~Vector() = default;
-
 Vector::Vector(size_t dim) { m_dim = dim; }
 
 IVector* IVector::createVector(size_t dim, double const* const& ptr_data) {

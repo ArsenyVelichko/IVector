@@ -28,12 +28,10 @@ namespace {
 
 		size_t sizeAllocated() const override;
 
-		~Vector();
-
 		static Vector* createVector(size_t dim, const double* const& data);
 
 	private:
-		Vector(size_t dim);
+		explicit Vector(size_t dim);
 
 		double* getData();
 
