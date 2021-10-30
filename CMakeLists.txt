@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.0)
 project(Interfaces)
 
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 set(BUILD_INTERFACES ON CACHE BOOL "")
 
@@ -13,29 +17,13 @@ include_directories(include)
 
 set(UTILS_DIRECTORY "${CMAKE_SOURCE_DIR}/src/Utils")
 
-macro(create_lib_subdirectory LIB_NAME)
-	project(${LIB_NAME})
-
-	file(GLOB SOURCE_FILES *.cpp *.h)
-
-	add_library(${LIB_NAME} ${SOURCE_FILES})
-	target_include_directories(${LIB_NAME} PRIVATE ${UTILS_DIRECTORY})
-	target_link_libraries(${LIB_NAME} Utils)
-
-	set(EXE_DEPENDENCIES ${EXE_DEPENDENCIES} ${LIB_NAME} PARENT_SCOPE)
-endmacro()
-
 add_subdirectory(src/Utils)
 
+add_subdirectory(src/Logger)
 add_subdirectory(src/Vector)
 add_subdirectory(src/Set)
-add_subdirectory(src/Logger)
 add_subdirectory(src/Compact)
-add_subdirectory(src/Problem)
-
-message(STATUS "${EXE_DEPENDENCIES}")
+#add_subdirectory(src/Problem)
 
 add_executable(${PROJECT_NAME} src/main.cpp)
-target_link_libraries(${PROJECT_NAME} ${EXE_DEPENDENCIES})
-
-
+target_link_libraries(${PROJECT_NAME} Logger Vector Set Compact)

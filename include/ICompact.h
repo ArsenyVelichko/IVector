@@ -36,7 +36,7 @@ public:
     /* CompactSpan - компактная оболочка: строим наименьшее компактное множество, содержащее 2 переданных */
     static ICompact* createCompactSpan(ICompact const *op1, ICompact const *op2, IMultiIndex const* const grid);
 
-    class IIterator {
+    class LIB_EXPORT IIterator {
     public:
         virtual IIterator * getNext() = 0;
         virtual IIterator * clone() const = 0;

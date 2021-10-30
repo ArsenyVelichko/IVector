@@ -309,6 +309,7 @@ void compactTest(ILogger* logger) {
 
 int main() {
 	ILogger* logger = ILogger::createLogger("Log.txt");
+	logger->info(RC::SUCCESS);
 
 	IVector::setLogger(logger);
 	ISet::setLogger(logger);

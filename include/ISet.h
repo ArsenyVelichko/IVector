@@ -44,7 +44,7 @@ public:
     /*
     * Iterator object can be created with ISet methods ISet::getIterator, ISet::getBegin, ISet::getEnd
     */
-    class IIterator {
+    class LIB_EXPORT IIterator {
     public:
         /*
         * Create iterator associated with next/previous position
