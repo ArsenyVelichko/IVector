@@ -9,6 +9,11 @@
 #include <ISet.h>
 #include <IVector.h>
 
+#include <IBroker.h>
+#include <IDiffProblem.h>
+
+#include "LibUtils.h"
+
 using namespace std;
 
 void printVector(IVector* vector) {
@@ -18,13 +23,20 @@ void printVector(IVector* vector) {
 	cout << ")" << endl;
 }
 
-void printBool(bool x) {
-	cout << (x ? "true" : "false") << endl;
+void printMultiIndex(IMultiIndex* index) {
+	auto indexData = index->getData();
+	cout << "( ";
+	for (size_t i = 0; i < index->getDim(); i++) {
+		cout << indexData[i] << ' ';
+	}
+	cout << ")" << endl;
 }
 
 bool fuzzyCompare(double x, double y, double tol) { return fabs(x - y) < tol; }
 
-void vectorTest() {
+void vectorTest(ILogger* logger) {
+	IVector::setLogger(logger);
+
 	double tol = 1.0e-10;
 	size_t dim = 3;
 
@@ -116,7 +128,10 @@ void printSet(ISet* set) {
 	cout << "]" << endl;
 }
 
-void setTest() {
+void setTest(ILogger* logger) {
+	ISet::setLogger(logger);
+	ISet::IIterator::setLogger(logger);
+
 	std::random_device rd;
 	std::default_random_engine eng(rd());
 	std::uniform_real_distribution<double> distr(-100, 100);
@@ -184,12 +199,12 @@ void setTest() {
 
 	cout << "Set A is subset of Set B: ";
 	bool isSubset = ISet::subSet(set1, set2, IVector::NORM::SECOND, tol);
-	printBool(isSubset);
+	cout << isSubset << endl;
 	assert(isSubset == true);
 
 	cout << "Set B is subset of Set A: ";
 	isSubset = ISet::subSet(set2, set1, IVector::NORM::SECOND, tol);
-	printBool(isSubset);
+	cout << isSubset << endl;
 	assert(isSubset == false);
 
 	delete set1;
@@ -214,6 +229,10 @@ void printCompact(ICompact* compact, IMultiIndex* byPass) {
 }
 
 void compactTest(ILogger* logger) {
+	ICompact::setLogger(logger);
+	ICompact::IIterator::setLogger(logger);
+	IMultiIndex::setLogger(logger);
+
 	size_t dim = 2;
 	double tol = 1.0e-10;
 
@@ -287,14 +306,14 @@ void compactTest(ILogger* logger) {
 	auto vec = IVector::createVector(dim, vector<double>{1, 1}.data());
 	printVector(vec);
 	bool isInside = compact1->isInside(vec);
-	printBool(isInside);
+	cout << isInside << endl;
 	assert(isInside == false);
 
 	cout << "Is point inside Compact A: ";
 	vec->setCoord(1, 3);
 	printVector(vec);
 	isInside = compact1->isInside(vec);
-	printBool(isInside);
+	cout << isInside << endl;
 	assert(isInside == true);
 
 	delete vec;
@@ -305,27 +324,202 @@ void compactTest(ILogger* logger) {
 	delete steps;
 	delete bound1;
 	delete bound2;
+
+	cout << "Compact test successfully finished\n\n";
+}
+
+void problemTest(ILogger* logger) {
+	LIB dll = LOAD_LIBRARY("libProblem");
+	if (!dll) {
+		cout << "Unable to load library" << endl;
+		return;
+	}
+
+	auto getBroker = reinterpret_cast<GetBrokerFunc>(GET_BROKER(dll));
+	if (!getBroker) {
+		cout << "Unable to load procedure" << endl;
+		CLOSE_LIBRARY(dll);
+		return;
+	}
+
+	auto impl = IBroker::INTERFACE_IMPL::IPROBLEM;
+
+	auto broker = reinterpret_cast<IBroker*>(getBroker());
+	assert(broker->canCastTo(impl));
+
+	auto problem = reinterpret_cast<IDiffProblem*>(broker->getInterfaceImpl(impl));
+
+	double tol = 1.0e-10;
+	size_t argDim = 2;
+
+	vector<double> leftBoundData = { -20, -20 };
+	vector<double> rightBoundData = { 20, 20 };
+	vector<size_t> gridData = { 100, 100 };
+
+	IVector* argsLeftBound = IVector::createVector(argDim, leftBoundData.data());
+	IVector* argsRightBound = IVector::createVector(argDim, rightBoundData.data());
+	IMultiIndex* argsGrid = IMultiIndex::createMultiIndex(argDim, gridData.data());
+
+	ICompact* argsDomain = ICompact::createCompact(argsLeftBound, argsRightBound, argsGrid);
+
+	delete argsLeftBound;
+	delete argsRightBound;
+	delete argsGrid;
+
+	size_t paramDim = 4;
+
+	leftBoundData = { -10, -10, -10, -10 };
+	rightBoundData = { 10, 10, 10, 10 };
+	gridData = { 50, 50, 50, 50 };
+
+	IVector* paramsLeftBound = IVector::createVector(paramDim, leftBoundData.data());
+	IVector* paramsRightBound = IVector::createVector(paramDim, rightBoundData.data());
+	IMultiIndex* paramsGrid = IMultiIndex::createMultiIndex(paramDim, gridData.data());
+
+	ICompact* paramsDomain = ICompact::createCompact(paramsLeftBound, paramsRightBound, paramsGrid);
+
+	delete paramsLeftBound;
+	delete paramsRightBound;
+	delete paramsGrid;
+
+	problem->setArgsDomain(argsDomain, logger);
+	problem->setParamsDomain(paramsDomain);
+
+	delete argsDomain;
+	delete paramsDomain;
+
+	auto argPoint = IVector::createVector(argDim, vector<double>{ -0.5, -2 }.data());
+	cout << "Arguments values: ";
+	printVector(argPoint);
+
+	auto paramPoint = IVector::createVector(paramDim, vector<double>{ 3, -1, 7, -9 }.data());
+	cout << "Parameters values: ";
+	printVector(argPoint);
+
+	double funcValue = 8.75 + 7.0 * sin(4.5);
+
+	problem->setArgs(argPoint);
+	double val = problem->evalByParams(paramPoint);
+	cout << "Evaluate by params result: " << val << endl;
+	assert(fuzzyCompare(funcValue, val, tol));
+
+	problem->setParams(paramPoint);
+
+	val = problem->evalByArgs(argPoint);
+	cout << "Evaluate by args result: " << val << endl;
+	assert(fuzzyCompare(funcValue, val, tol));
+
+	IMultiIndex* argDerivOrder = IMultiIndex::createMultiIndex(argDim, vector<size_t>{ 0, 0 }.data());
+
+	auto argDerivTest = [&] (double correctRes) {
+		cout << "Arguments derivative order: ";
+		printMultiIndex(argDerivOrder);
+
+		double val = problem->evalDerivativeByArgs(argPoint, argDerivOrder);
+		cout << "Derivative by args result: " << val << endl;
+		assert(fuzzyCompare(correctRes, val, tol));
+	};
+
+	argDerivTest(funcValue);
+
+	argDerivOrder->setAxisIndex(1, 2);
+	argDerivTest(12.0);
+
+	argDerivOrder->setAxisIndex(1, 4);
+	argDerivTest(0.0);
+
+	argDerivOrder->setAxisIndex(0, 1);
+	argDerivOrder->setAxisIndex(1, 1);
+	argDerivTest(0.0);
+
+	argDerivOrder->setAxisIndex(0, 5);
+	argDerivOrder->setAxisIndex(1, 0);
+
+	double correctRes = -7 * pow(9.0, 5) * cos(4.5);
+	argDerivTest(correctRes);
+
+	delete argDerivOrder;
+
+	IMultiIndex* paramDerivOrder = IMultiIndex::createMultiIndex(paramDim, std::vector<size_t>{ 0, 0, 0, 0 }.data());
+
+	auto paramDerivTest = [&] (double correctRes) {
+		cout << "Parameters derivative order: ";
+		printMultiIndex(paramDerivOrder);
+
+		double val = problem->evalDerivativeByParams(paramPoint, paramDerivOrder);
+		cout << "Derivative by params result: " << val << endl;
+		assert(fuzzyCompare(correctRes, val, tol));
+	};
+
+	paramDerivTest(funcValue);
+
+	paramDerivOrder->setAxisIndex(1, 1);
+	paramDerivTest(-8.0);
+
+	paramDerivOrder->setAxisIndex(2, 1);
+	paramDerivTest(0.0);
+
+	paramDerivOrder->setAxisIndex(0, 2);
+	paramDerivOrder->setAxisIndex(1, 0);
+	paramDerivTest(0.0);
+
+	paramDerivOrder->setAxisIndex(0, 0);
+	paramDerivOrder->setAxisIndex(3, 3);
+
+	correctRes = -pow(-0.5, 3) * cos(4.5);
+	paramDerivTest(correctRes);
+
+	delete paramDerivOrder;
+
+	IVector* argGradient = IVector::createVector(argDim, vector<double>(argDim).data());
+	problem->evalGradientByArgs(argPoint, argGradient);
+	cout << "Gradient by args: ";
+	printVector(argGradient);
+
+	vector<double> correctGradData = { -3 - 63 * cos(4.5), -12 };
+	IVector* correctGrad = IVector::createVector(argDim, correctGradData.data());
+	assert(IVector::equals(argGradient, correctGrad, IVector::NORM::SECOND, tol));
+
+	delete argGradient;
+	delete correctGrad;
+
+	IVector* paramsGradient = IVector::createVector(paramDim, vector<double>(paramDim).data());
+	problem->evalGradientByParams(paramPoint, paramsGradient);
+	cout << "Gradient by params: ";
+	printVector(paramsGradient);
+
+	correctGradData = { 0.25, -8.0, sin(4.5), -3.5 * cos(4.5) };
+	correctGrad = IVector::createVector(paramDim, correctGradData.data());
+	assert(IVector::equals(paramsGradient, correctGrad, IVector::NORM::SECOND, tol));
+
+	delete paramsGradient;
+	delete correctGrad;
+
+	delete argPoint;
+	delete paramPoint;
+
+	delete problem;
+
+	CLOSE_LIBRARY(dll);
+	cout << "Problem test successfully finished\n\n";
 }
 
 int main() {
 	ILogger* logger = ILogger::createLogger("Log.txt");
-	logger->info(RC::SUCCESS);
 
-	IVector::setLogger(logger);
-	ISet::setLogger(logger);
-	ISet::IIterator::setLogger(logger);
-	ICompact::setLogger(logger);
-	ICompact::IIterator::setLogger(logger);
-	IMultiIndex::setLogger(logger);
+	cout << std::boolalpha;
 
 	cout << "### Vector test ###\n\n";
-	vectorTest();
+	vectorTest(logger);
 
 	cout << "### Set test ###\n\n";
-	setTest();
+	setTest(logger);
 
 	cout << "### Compact test ###\n\n";
 	compactTest(logger);
+
+	cout << "### Problem test ###\n\n";
+	problemTest(logger);
 
 	return 0;
 }

@@ -20,3 +20,7 @@ private:
     IBroker(const IBroker&) = delete;
     IBroker& operator=(const IBroker&) = delete;
 };
+
+extern "C" {
+	LIB_EXPORT void* getBroker();
+}
