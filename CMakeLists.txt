@@ -18,6 +18,6 @@ add_subdirectory(src/Vector)
 add_subdirectory(src/Set)
 add_subdirectory(src/Compact)
 add_subdirectory(src/Problem)
+add_subdirectory(src/Solver)
 
-add_executable(${PROJECT_NAME} src/main.cpp src/LibUtils.h)
-target_link_libraries(${PROJECT_NAME} Logger Vector Set Compact ${CMAKE_DL_LIBS})
+add_subdirectory(tests)

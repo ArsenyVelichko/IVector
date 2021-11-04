@@ -9,7 +9,7 @@ using std::isnan;
 
 Vector* Vector::createVector(size_t dim, double const* const& data) {
 	size_t size = sizeof(Vector) + dim * sizeof(double);
-	uint8_t* mem = new (std::nothrow) uint8_t[size];
+	auto mem = new (std::nothrow) uint8_t[size];
 	if (!mem) {
 		log_warning(RC::ALLOCATION_ERROR);
 		return nullptr;
@@ -24,7 +24,13 @@ Vector* Vector::createVector(size_t dim, double const* const& data) {
 	return vector;
 }
 
-ILogger* IVector::getLogger() { return LogContainer<Vector>::getInstance(); }
+RC IVector::setLogger(ILogger* const logger) {
+	return LogContainer<Vector>::setInstance(logger);
+}
+
+ILogger* IVector::getLogger() {
+	return LogContainer<Vector>::getInstance();
+}
 
 IVector* Vector::clone() const { return Vector::createVector(m_dim, getData()); }
 
@@ -260,8 +266,6 @@ RC IVector::moveInstance(IVector* const dest, IVector*& src) {
 	src = nullptr;
 	return RC::SUCCESS;
 }
-
-RC IVector::setLogger(ILogger* const logger) { return LogContainer<Vector>::setInstance(logger); }
 
 IVector* IVector::add(IVector const* const& op1, IVector const* const& op2) {
 	return VectorUtils::binaryOp(op1, op2, [](double x, double y) { return x + y; });

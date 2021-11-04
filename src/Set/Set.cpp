@@ -1,11 +1,18 @@
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 
 #include "VectorUtils.h"
 
 #include "Set.h"
 #include "SetControlBlock.h"
+
+RC ISet::setLogger(ILogger* const logger) {
+	return LogContainer<Set>::setInstance(logger);
+}
+
+ILogger* ISet::getLogger() {
+	return LogContainer<Set>::getInstance();
+}
 
 size_t Set::vecDataSize() const { return m_dim * sizeof(double); }
 
@@ -186,9 +193,6 @@ Set::~Set() {
 	delete[] m_data;
 	delete[] m_hashArr;
 }
-
-RC ISet::setLogger(ILogger* const logger) { return LogContainer<Set>::setInstance(logger); }
-ILogger* ISet::getLogger() { return LogContainer<Set>::getInstance(); }
 
 ISet* ISet::createSet() { return Set::createSet(); }
 
